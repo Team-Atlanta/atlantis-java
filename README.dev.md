@@ -1,5 +1,7 @@
 # CRS-java Dev Guide
 
+This guide is for running the Atlantis-Java CRS locally (without OSS-CRS), mostly for debugging purposes.
+
 - 1. Set up [./crs/crs-java.config](./crs/crs-java.config) according to [docs](./docs/javacrscfg.schema.md).
 - 2. Use `dev.sh` to build, run, develop the CRS.
 
