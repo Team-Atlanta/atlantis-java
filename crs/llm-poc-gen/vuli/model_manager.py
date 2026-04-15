@@ -358,7 +358,7 @@ class ModelManager(metaclass=Singleton):
             return preferred
         if self._models:
             fallback = next(iter(self._models))
-            self._logger.info(f"Model '{preferred}' not available, falling back to '{fallback}'")
+            self._logger.warning(f"Model '{preferred}' not available, falling back to '{fallback}'")
             return fallback
         raise RuntimeError(f"No models registered (requested '{preferred}')")
 
@@ -422,7 +422,8 @@ class ModelManager(metaclass=Singleton):
         """
         Raises: RuntimeError, LLMRetriable
         """
-        model_name = self.resolve_model(model_name)
+        if model_name not in self._models:
+            raise RuntimeError(f"Model '{model_name}' is not registered")
 
         metadata: ModelMetadata = self._models[model_name]
         if self._cache:
@@ -464,7 +465,8 @@ class ModelManager(metaclass=Singleton):
         """
         Raises: RuntimeError, LLMParseException, LLMRetriable, RuntimeError
         """
-        model_name = self.resolve_model(model_name)
+        if model_name not in self._models:
+            raise RuntimeError(f"Model '{model_name}' is not registered")
 
         metadata: ModelMetadata = self._models[model_name]
         if self._cache:
