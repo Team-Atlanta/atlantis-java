@@ -1,4 +1,4 @@
-from .codeql import CodeQL, CodeQLParams
+from .sinkdetection import SinkDetection, SinkDetectionParams
 from .concolic import ConcolicExecutor, ConcolicExecutorParams
 from .cpuallocator import CPUAllocator, CPUAllocatorParams
 from .crashmanager import CrashManager, CrashManagerParams
@@ -37,8 +37,8 @@ __all__ = [
     "AtlDirectedJazzerParams",
     "AtlLibAFLJazzer",
     "AtlLibAFLJazzerParams",
-    "CodeQL",
-    "CodeQLParams",
+    "SinkDetection",
+    "SinkDetectionParams",
     "SeedMerger",
     "SeedMergerParams",
     "LLMPOCGenerator",

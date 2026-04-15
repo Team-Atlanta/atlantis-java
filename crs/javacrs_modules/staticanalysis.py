@@ -253,7 +253,7 @@ class StaticAnalysis(Module):
         try:
             sink = Sinkpoint.frm_dict(target.get_target_location())
             self.logH(None, f"Static analysis update sinkpoint to sinkmanager: {sink}")
-            await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+            await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="staticanalysis")
         except Exception as e:
             self.logH(
                 None,

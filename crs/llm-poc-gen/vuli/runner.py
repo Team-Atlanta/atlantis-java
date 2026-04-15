@@ -130,13 +130,15 @@ class Runner(ABC):
 
 
 class StandAlone(Runner):
-    def __init__(self, workers: int = 1):
+    def __init__(self, workers: int = 1, scan_sinks: bool = True):
         super().__init__()
         self._logger = logging.getLogger(self.__class__.__name__)
         self._blobgen = BlobGeneration(CoverageBasedGeneration(), workers)
+        self._scan_sinks = scan_sinks
 
     async def _run(self) -> None:
-        await Scanner().run(CP().sanitizers)
+        if self._scan_sinks:
+            await Scanner().run(CP().sanitizers)
         await DeltaManager().handle()
         # await ReflectionSolver(CP().get_harnesses()).run()
         await FindPathService()._run()
@@ -145,9 +147,10 @@ class StandAlone(Runner):
 
 
 class CRS(Runner):
-    def __init__(self, workers: int = 1):
+    def __init__(self, workers: int = 1, scan_sinks: bool = True):
         super().__init__()
         self._logger = logging.getLogger("CRS")
+        self._scan_sinks = scan_sinks
         sink_updater = SinkUpdateService()
         sink_updater.add_task(JavaCRS(CP()._sink_path))
         TaskManager().add_handlers(
@@ -179,7 +182,8 @@ class CRS(Runner):
 
     async def _run(self) -> None:
         TaskManager()._stop = False
-        await Scanner().run(CP().sanitizers)
+        if self._scan_sinks:
+            await Scanner().run(CP().sanitizers)
         await DeltaManager().handle()
 
         self._logger.info(
@@ -242,7 +246,11 @@ class SINK(Runner):
 
 
 def create_runner(
-    mode: str, workers: int = 1, model_cache: Optional[Path] = None
+    mode: str,
+    workers: int = 1,
+    model_cache: Optional[Path] = None,
+    models: Optional[list[str]] = None,
+    scan_sinks: bool = True,
 ) -> Optional[Runner]:
     model_map = {
         "onetime": ["claude-sonnet-4-20250514", "o3", "gemini-2.5-pro", "gpt-4.1"],
@@ -252,20 +260,23 @@ def create_runner(
         "default": [
             "claude-opus-4-20250514",
             "o3",
+            "claude-sonnet-4-20250514",
             "gemini-2.5-pro",
             "gpt-4.1",
         ],
     }
 
     runner_map = {
-        "onetime": lambda: StandAlone(workers),
+        "onetime": lambda: StandAlone(workers, scan_sinks),
         "static": STATIC,
         "sink": SINK,
         "c_sarif": lambda: C_SARIF(workers),
-        "default": lambda: CRS(workers),
+        "default": lambda: CRS(workers, scan_sinks),
     }
 
-    models = model_map.get(mode, model_map["default"])
+    if models is None:
+        models = model_map.get(mode, model_map["default"])
+
     runner_factory = runner_map.get(mode, runner_map["default"])
 
     set_models(model_cache, models)

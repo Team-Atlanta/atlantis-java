@@ -267,7 +267,7 @@ Line number should indicate the line in hunk where vulnerability will be trigger
             for i in range(0, 3):
                 try:
                     return await ModelManager().invoke_atomic(
-                        messages, "gpt-4.1", DeltaParser()
+                        messages, "gpt-4.1", DeltaParser(), agent="delta"
                     )
                 except LLMRetriable:
                     await asyncio.sleep(60)

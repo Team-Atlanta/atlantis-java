@@ -161,6 +161,12 @@ COPY ./crs/codeql ${JAVA_CRS_SRC}/codeql
 RUN cd ${JAVA_CRS_SRC}/codeql && \
     ./init.sh
 
+## filtering-agent (LLM-powered exploitability assessment)
+COPY ./crs/filtering-agent ${JAVA_CRS_SRC}/filtering-agent
+RUN cd ${JAVA_CRS_SRC}/filtering-agent && \
+    if [ -f requirements.txt ]; then /venv/bin/pip install --no-cache-dir -r requirements.txt; fi && \
+    rm -rf /root/.cache/pip
+
 ## llm-poc-gen
 COPY ./crs/llm-poc-gen ${JAVA_CRS_SRC}/llm-poc-gen
 ENV PATH=${PATH}:/root/.local/bin
@@ -217,13 +223,11 @@ RUN cd ${JAVA_CRS_SRC}/deepgen/jvm/stuck-point-analyzer && \
     rm -rf /root/.cache/pip
 
 ## crs-java main entry
-COPY ./crs/*.sh ./crs/*.py ./crs/requirements.txt ./crs/jazzer_driver_stub ./crs/crs-java.config ./crs/sink-targets.txt ${JAVA_CRS_SRC}/
+COPY ./crs/*.sh ./crs/*.py ./crs/requirements.txt ./crs/jazzer_driver_stub ./crs/crs-java.config ${JAVA_CRS_SRC}/
 COPY ./crs/javacrs_modules ${JAVA_CRS_SRC}/javacrs_modules
 COPY ./crs/tests ${JAVA_CRS_SRC}/tests
 RUN /venv/bin/pip install --no-cache-dir -r ${JAVA_CRS_SRC}/requirements.txt && \
     rm -rf /root/.cache/pip
-ENV JAVA_CRS_SINK_TARGET_CONF=${JAVA_CRS_SRC}/sink-targets.txt
-ENV JAVA_CRS_CUSTOM_SINK_YAML=${JAVA_CRS_SRC}/codeql/sink_definitions.yml
 
 ## git setup
 RUN git config --global --add safe.directory '*'
@@ -236,12 +240,6 @@ COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_agent_deploy.jar /class
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_driver /classpath/raw-jazzer/jazzer
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_junit.jar /classpath/raw-jazzer/
 COPY --from=aixcc_afc_builder_base /usr/local/lib/jazzer_api_deploy.jar /classpath/raw-jazzer/
-
-### NOTE: exp only
-COPY crs/ssmode-lpg.toml ${JAVA_CRS_SRC}/ssmode-lpg.toml
-COPY crs/ssmode-sink.txt ${JAVA_CRS_SRC}/ssmode-sink.txt
-RUN mkdir -p ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet && \
-    cp ${JAVA_CRS_SRC}/ssmode-lpg.toml ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet/cpv.toml
 
 #################################################################################
 ## oss-crs integration layer

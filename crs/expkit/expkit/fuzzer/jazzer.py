@@ -118,7 +118,7 @@ taskset -c {self.cpu_id} \\
         command_sh.chmod(0o755)
         return command_sh
 
-    def _init_result_json(self, fuzz_id: str, fuzz_time: int, mem_size: int):
+    def _init_result_json(self, fuzz_id: str, fuzz_time: int, mem_size: int, verify_only: bool = False):
         if not self.result_json.parent.exists():
             self.result_json.parent.mkdir(parents=True, exist_ok=True)
 
@@ -130,6 +130,8 @@ taskset -c {self.cpu_id} \\
         self.env["FUZZ_TARGET_HARNESS"] = self.target_harness
         if self.custom_sink_conf_path is not None:
             self.env["FUZZ_CUSTOM_SINK_CONF"] = self.custom_sink_conf_path
+        if verify_only:
+            self.env["FUZZ_VERIFY_ONLY"] = "1"
 
         init_data = {
             "cp": self.cp_name,
@@ -159,12 +161,12 @@ taskset -c {self.cpu_id} \\
         with open(self.result_json, "w") as f:
             json.dump(init_data, f, indent=2)
 
-    def fuzz(self, fuzz_id: str, fuzz_time: int, mem_size: int = 4096) -> Path:
+    def fuzz(self, fuzz_id: str, fuzz_time: int, mem_size: int = 4096, verify_only: bool = False):
         try:
             self._write_dict_file()
             logger.info(f"Fuzz dict file has {len(self.dict_values)} entries")
 
-            self._init_result_json(fuzz_id, fuzz_time, mem_size)
+            self._init_result_json(fuzz_id, fuzz_time, mem_size, verify_only=verify_only)
 
             cwd = f"/tmp-{fuzz_id}"
             command_sh = self._write_command_script(cwd)
@@ -205,3 +207,16 @@ taskset -c {self.cpu_id} \\
             err_str = f"{CRS_ERR} Fuzzing failed: {str(e)}"
             logger.error(f"{err_str} with traceback:\n{traceback.format_exc()}")
             raise RuntimeError(err_str)
+
+    def clone(self, work_dir: Path):
+        return JazzerFuzzer(
+            jazzer_dir=self.jazzer_dir,
+            work_dir=work_dir,
+            cp_name=self.cp_name,
+            target_harness=self.target_harness,
+            fuzz_target=self.fuzz_target,
+            target_classpath=self.target_classpath,
+            custom_sink_conf_path=self.custom_sink_conf_path,
+            cpu_id=self.cpu_id,
+            custom_args=list(self.custom_args),
+        )

@@ -39,13 +39,9 @@ class ExpKitParams(BaseModel):
         300,
         description="**Optional**, timeout in seconds for each beepseed exploitation. Default is 300 seconds.",
     )
-    gen_models: str = Field(
+    gen_model: str = Field(
         ...,
-        description="**Mandatory**, comma-separated list of generation models. Format: 'model1:weight1,model2:weight2,...'. Example: 'o1-preview:10,claude-3-7-sonnet-20250219:20,none:5'",
-    )
-    x_models: str = Field(
-        ...,
-        description="**Mandatory**, comma-separated list of extraction models. Format: 'model1:weight1,model2:weight2,...'. Example: 'gpt-4o:10,o3-mini:20,none:5'",
+        description="**Mandatory**, LLM model used by the exploitation agent.",
     )
     debug_list_txt: Optional[str] = Field(
         None,
@@ -68,21 +64,10 @@ class ExpKitParams(BaseModel):
             raise ValueError("exp_time must be a positive integer")
         return v
 
-    @field_validator("gen_models", "x_models")
-    def models_should_be_valid(cls, v):
-        if not isinstance(v, str):
-            raise ValueError("gen_models and x_models must be strings")
-        models = v.split(",")
-        for model in models:
-            if ":" not in model:
-                raise ValueError(
-                    "Invalid format for gen_models or x_models. Expected 'model:weight'"
-                )
-            model_name, weight = model.split(":")
-            if not weight.isdigit() or int(weight) <= 0:
-                raise ValueError(
-                    "Weight must be a positive integer in the format 'model:weight'"
-                )
+    @field_validator("gen_model")
+    def gen_model_should_be_non_empty(cls, v):
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("gen_model must be a non-empty string")
         return v
 
     @field_validator("debug_list_txt")
@@ -272,8 +257,7 @@ class ExpKit(Module):
         self.enabled = self.params.enabled
         self.monitor_interval = 0.1
         self.exp_time = self.params.exp_time
-        self.gen_models = self.params.gen_models
-        self.x_models = self.params.x_models
+        self.gen_model = self.params.gen_model
         self.handled_beeps: Set[str] = set()
         # NOTE: This should be init in runtime, in async_run
         self.target_harnesses: List[str] | None = None
@@ -397,7 +381,7 @@ class ExpKit(Module):
                     None,
                     f"Expkit update sinkpoint to sinkmanager from beepseed: {sink}",
                 )
-                await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+                await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="expkit")
 
                 # Mark after it is successfully handled as race can happen when loading
                 await self._mark_handled_path(json_path)
@@ -489,7 +473,7 @@ class ExpKit(Module):
                 None,
                 f"Expkit update sinkpoint to sinkmanager from debug beepseed: {sink}",
             )
-            await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+            await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="expkit")
 
         except (FileNotFoundError, JSONDecodeError) as e:
             self.logH(
@@ -511,9 +495,14 @@ class ExpKit(Module):
         result_file: Path,
         log_file: Path,
         exp_time: int,
+        time_left: int,
     ) -> Path:
         """Generate shell script to execute expkit tool for a beepseed."""
         command = [
+            "timeout",
+            "-s",
+            "SIGKILL",
+            f"{str(time_left)}s",
             "taskset",
             "-c",
             str(cpu_id),
@@ -526,10 +515,8 @@ class ExpKit(Module):
             str(self.crs.meta.meta_path.resolve()),
             "--exp-time",
             str(exp_time),
-            "--gen-models",
-            self.gen_models,
-            "--x-models",
-            self.x_models,
+            "--gen-model",
+            self.gen_model,
             "--workdir",
             str(output_dir.resolve()),
             "--verbose",
@@ -694,6 +681,7 @@ class ExpKit(Module):
                 result_file,
                 log_file,
                 actual_exp_time,
+                int(self.ttl_fuzz_time - elapsed_time),
             )
 
             self.logH(None, f"Starting exploitation with timeout {actual_exp_time}s")

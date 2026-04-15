@@ -145,7 +145,7 @@ class BlobGenerator:
     ) -> BlobGeneratorResult:
         try:
             model_result: list[dict] = await ModelManager().invoke(
-                messages, model_name, parser
+                messages, model_name, parser, agent="blobgen"
             )
         except Exception as e:
             self._logger.warning(f"Skip Exception: {e}")
@@ -265,7 +265,7 @@ class BlobGenerator:
         """
         try:
             model_output: list[dict] = await ModelManager().invoke_atomic(
-                messages, model_name, parser
+                messages, model_name, parser, agent="blobgen"
             )
         except LLMParseException:
             self._logger.info(

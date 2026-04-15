@@ -319,6 +319,27 @@ fi
 # Kick off the fuzzer
 #
 cat > "${WORK_DIR}/_run_fuzzer_timeout_stub.sh" <<EOF
+# Restart-on-sink-growth tunables.
+# N -> M growth restarts are gated by COOLDOWN_SECONDS so each Jazzer instance
+# gets at least that much productive run time before it can be killed. The
+# 0 -> N case (first sinks ever arriving) bypasses the cooldown.
+POLL_INTERVAL=5
+GROWTH_PCT=10
+COOLDOWN_SECONDS=300
+
+# Recursively signal a process and all its descendants. We walk the tree
+# ourselves instead of using process groups because run_fuzzer stays in the
+# stub's process group, so the outer 'timeout -s SIGKILL' at campaign end
+# continues to clean up the entire subtree in one shot.
+kill_tree() {
+  local pid=\$1 sig=\$2
+  local c
+  for c in \$(pgrep -P "\$pid" 2>/dev/null); do
+    kill_tree "\$c" "\$sig"
+  done
+  kill -"\$sig" "\$pid" 2>/dev/null || true
+}
+
 while true
 do
 
@@ -336,12 +357,64 @@ do
     fi
   fi
 
-  timeout -s SIGKILL 900s \
-    stdbuf -e 0 -o 0 \
-      run_fuzzer ${FUZZ_TARGET_HARNESS} \
-        --agent_path=\${JAZZER_DIR}/jazzer_standalone_deploy.jar \
-        \${ATL_OPTIONS} \
-        "\$@" || echo @@@@@ exit code of Jazzer is $? @@@@@ >&2
+  # Snapshot the sink count at iteration start. One line = one sink
+  # (caller#... or api#...), and sinks are monotonic, so line count is
+  # a direct measure of "did the sink pool grow".
+  baseline_lines=\$(wc -l < "\$ATLJAZZER_CUSTOM_SINKPOINT_CONF" 2>/dev/null || echo 0)
+  iter_start_ts=\$(date +%s)
+  echo "SINK_RESTART: starting run_fuzzer (baseline_lines=\$baseline_lines, growth_pct=\${GROWTH_PCT}, cooldown=\${COOLDOWN_SECONDS}s)"
+
+  stdbuf -e 0 -o 0 \
+    run_fuzzer ${FUZZ_TARGET_HARNESS} \
+      --agent_path=\${JAZZER_DIR}/jazzer_standalone_deploy.jar \
+      \${ATL_OPTIONS} \
+      "\$@" &
+  RF_PID=\$!
+
+  # Watch for sink-conf growth while run_fuzzer runs.
+  should_restart=0
+  while kill -0 \$RF_PID 2>/dev/null; do
+    sleep \$POLL_INTERVAL
+    now=\$(date +%s)
+    cur_lines=\$(wc -l < "\$ATLJAZZER_CUSTOM_SINKPOINT_CONF" 2>/dev/null || echo 0)
+
+    # 0 -> N always triggers (first sinks ever arriving). No cooldown so
+    # Jazzer stops wasting time fuzzing with an empty sink set.
+    if [[ \$baseline_lines -eq 0 && \$cur_lines -gt 0 ]]; then
+      echo "SINK_RESTART: 0 -> \$cur_lines, requesting restart"
+      should_restart=1
+      break
+    fi
+
+    # N -> M triggers when growth >= GROWTH_PCT, but only after COOLDOWN_SECONDS
+    # have elapsed since this iteration started — gives each Jazzer instance a
+    # minimum productive run time and prevents restart thrashing on small pools
+    # or trickling sink sources.
+    if [[ \$baseline_lines -gt 0 && \$((cur_lines * 100)) -ge \$((baseline_lines * (100 + GROWTH_PCT))) ]]; then
+      if [[ \$((now - iter_start_ts)) -ge \$COOLDOWN_SECONDS ]]; then
+        echo "SINK_RESTART: \$baseline_lines -> \$cur_lines (>= \${GROWTH_PCT}%), requesting restart"
+        should_restart=1
+        break
+      fi
+    fi
+  done
+
+  if [[ \$should_restart -eq 1 ]]; then
+    # Walk run_fuzzer's descendants (/out/<harness>, atl-jazzer, java) and
+    # signal each one. SIGTERM first so libfuzzer can flush corpus / jacoco /
+    # result.json; SIGKILL after 15s grace.
+    kill_tree \$RF_PID TERM
+    for _ in {1..15}; do
+      kill -0 \$RF_PID 2>/dev/null || break
+      sleep 1
+    done
+    kill_tree \$RF_PID KILL
+  fi
+  wait \$RF_PID 2>/dev/null
+  RF_RET=\$?
+  if [[ \$RF_RET -ne 0 && \$should_restart -eq 0 ]]; then
+    echo "@@@@@ exit code of Jazzer is \$RF_RET @@@@@" >&2
+  fi
 
   # Clean up!
   rm -rf ${DIRECTED_CLASS_DUMP_DIR}

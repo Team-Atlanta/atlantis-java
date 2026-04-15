@@ -31,6 +31,7 @@ from tenacity import (
     wait_random,
 )
 
+from vuli.chatlog import ChatLog
 from vuli.common.decorators import SEVERITY, async_lock, async_safe
 from vuli.common.singleton import Singleton
 from vuli.struct import LLMParseException, LLMRetriable
@@ -347,6 +348,32 @@ class ModelManager(metaclass=Singleton):
     def get_all_model_names(self) -> list[str]:
         return sorted(list(self._models.keys()))
 
+    def resolve_model(self, preferred: str) -> str:
+        """Resolve a preferred model name against available models.
+
+        Returns the preferred model if available, otherwise the first
+        registered model. Raises RuntimeError if no models are registered.
+        """
+        if preferred in self._models:
+            return preferred
+        if self._models:
+            fallback = next(iter(self._models))
+            self._logger.info(f"Model '{preferred}' not available, falling back to '{fallback}'")
+            return fallback
+        raise RuntimeError(f"No models registered (requested '{preferred}')")
+
+    def resolve_models(self, preferences: list[str]) -> list[str]:
+        """Filter a preference list against available models.
+
+        Returns the subset of preferred models that are registered, preserving
+        order. If none match, returns all registered models.
+        """
+        resolved = [m for m in preferences if m in self._models]
+        if resolved:
+            return resolved
+        # None of the preferred models are available — return all available
+        return list(self._models.keys())
+
     def get_total_usage(self) -> tuple[float, float]:
         total_cost: float = 0.0
         total_saved: float = 0.0
@@ -390,12 +417,12 @@ class ModelManager(metaclass=Singleton):
         messages: list[BaseMessage],
         model_name: str,
         parser: Optional[RunnableSequence],
+        agent: str = "",
     ) -> Any:
         """
         Raises: RuntimeError, LLMRetriable
         """
-        if model_name not in self._models:
-            raise RuntimeError(f"Unregistered Model: {model_name}")
+        model_name = self.resolve_model(model_name)
 
         metadata: ModelMetadata = self._models[model_name]
         if self._cache:
@@ -408,6 +435,9 @@ class ModelManager(metaclass=Singleton):
         except Exception as e:
             raise e
 
+        if agent:
+            ChatLog().log(agent, model_name, messages, message)
+
         try:
             _, result, _ = await self._retry_parse(
                 metadata.model,
@@ -415,6 +445,7 @@ class ModelManager(metaclass=Singleton):
                 message.content,
                 {"callbacks": [metadata.usage]},
                 1,
+                agent=agent,
             )
         except LLMRetriable as e:
             raise e
@@ -428,12 +459,12 @@ class ModelManager(metaclass=Singleton):
         messages: list[BaseMessage],
         model_name: str,
         parser: Optional[RunnableSequence],
+        agent: str = "",
     ) -> Any:
         """
         Raises: RuntimeError, LLMParseException, LLMRetriable, RuntimeError
         """
-        if model_name not in self._models:
-            raise RuntimeError(f"Unregistered Model: {model_name}")
+        model_name = self.resolve_model(model_name)
 
         metadata: ModelMetadata = self._models[model_name]
         if self._cache:
@@ -449,12 +480,15 @@ class ModelManager(metaclass=Singleton):
                     metadata.model, messages, {"callbacks": [metadata.usage]}
                 )
                 self._logger.debug(f"LLM Response [{message.pretty_repr()}]")
+                if agent:
+                    ChatLog().log(agent, model_name, messages, message)
                 _, result, _ = await self._retry_parse(
                     metadata.model,
                     parser,
                     message.content,
                     {"callbacks": [metadata.usage]},
                     self._max_retries,
+                    agent=agent,
                 )
                 return result
             except LLMParseException as e:
@@ -517,6 +551,7 @@ class ModelManager(metaclass=Singleton):
         completion: str,
         config: dict = {},
         max_retries=1,
+        agent: str = "",
     ):
         """
         Raises: LLMParseException, LLMRetriable, RuntimeException
@@ -537,5 +572,9 @@ class ModelManager(metaclass=Singleton):
                     message: BaseMessage = await self._invoke_atomic(
                         runnable, messages, config
                     )
+                    if agent:
+                        ChatLog().log(
+                            agent, runnable.model_name, messages, message
+                        )
                     parse_content = message.content
         raise LLMParseException("Failed to parse")

@@ -9,7 +9,7 @@ from javacrs_modules import (
     AtlDirectedJazzerParams,
     AtlJazzerParams,
     AtlLibAFLJazzerParams,
-    CodeQLParams,
+    SinkDetectionParams,
     ConcolicExecutorParams,
     CPUAllocatorParams,
     CrashManagerParams,
@@ -65,7 +65,7 @@ class ModuleParams(BaseModel):
     concolic: ConcolicExecutorParams = Field(
         ..., description="ConcolicExecutor module parameters."
     )
-    codeql: CodeQLParams = Field(..., description="CodeQL module parameters.")
+    sinkdetection: SinkDetectionParams = Field(..., description="SinkDetection module parameters.")
     dictgen: DictgenParams = Field(..., description="Dictgen module parameters.")
     diff_scheduler: DiffSchedulerParams = Field(
         ..., description="DiffScheduler module parameters."
@@ -112,8 +112,8 @@ class JavaCRSParams(BaseModel):
         description="**Optional**, if set, enable sync log to NFS right after e2e. Default is False.",
     )
     ssmode: bool = Field(
-        False,
-        description="**Optional**, if set, enable SS mode (Specified Sink only mode) for the CRS. Default is False.",
+        True,
+        description="**Optional**, if set, only use sinks from sinkmanager. If False, also use all Jazzer static sinks. Default is True.",
     )
     modules: ModuleParams = Field(..., description="Module parameters.")
 
@@ -240,6 +240,16 @@ def update_cfg_from_env(conf: dict) -> dict:
     return conf
 
 
+def deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base, preserving existing keys at all levels."""
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def update_remote_specified_cfg(local_conf_file: str):
     with open(local_conf_file) as f:
         local_conf = json.load(f)
@@ -250,7 +260,7 @@ def update_remote_specified_cfg(local_conf_file: str):
         print(f"Merging custom configuration from JAVACRS_CFG: {javacrs_cfg}")
         with open(javacrs_cfg) as f:
             remote_conf = json.load(f)
-        local_conf.update(remote_conf)
+        deep_merge(local_conf, remote_conf)
     elif javacrs_cfg is not None:
         print(f"Custom config not found at: {javacrs_cfg}, using default configuration")
 

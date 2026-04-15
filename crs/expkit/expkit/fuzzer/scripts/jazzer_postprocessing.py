@@ -64,6 +64,12 @@ OLD_CRASH_ARTIFACT_LINE_PTRN = re.compile(
 CRASH_ARTIFACT_LINE_PTRN = re.compile(
     r"^(\d+)\sartifact_prefix=.*; Test unit written to .*/artifacts/((crash|timeout)-[a-z0-9]+)"
 )
+OLD_CRASH_REPRO_ARTIFACT_LINE_PTRN = re.compile(
+    r"^Executed (\S*) in \d+ ms"
+)
+CRASH_REPRO_ARTIFACT_LINE_PTRN = re.compile(
+    r"^(\d+)\sExecuted (\S*) in \d+ ms"
+)
 # NOTE: TODO: libafl-jazzer currently does not log timeout artifact info
 LIBAFL_JAZZER_CRASH_ARTIFACT_LINE_PTRN = re.compile(
     r"^(\d+)\s\[libafl\] Received jazzer death callback! Dumping corpus as crash to .*/artifacts/(crash-[a-z0-9]+)"
@@ -349,28 +355,37 @@ def _parse_artifact_line(
 ) -> Optional[Tuple]:
     global is_libafl_jazzer
 
+    # Define patterns based on mode
     if is_libafl_jazzer:
-        match = LIBAFL_JAZZER_CRASH_ARTIFACT_LINE_PTRN.match(line)
-        if match:
-            timestamp, artifact = int(match.group(1)), match.group(2)
-            elapsed_time = (
-                timestamp - initial_timestamp if initial_timestamp is not None else None
-            )
-            return elapsed_time, artifact
-        return None
+        patterns_with_timestamp = [LIBAFL_JAZZER_CRASH_ARTIFACT_LINE_PTRN]
+        patterns_without_timestamp = []
     else:
-        match = CRASH_ARTIFACT_LINE_PTRN.match(line)
+        patterns_with_timestamp = [
+            CRASH_ARTIFACT_LINE_PTRN,
+            CRASH_REPRO_ARTIFACT_LINE_PTRN
+        ]
+        patterns_without_timestamp = [
+            OLD_CRASH_ARTIFACT_LINE_PTRN,
+            OLD_CRASH_REPRO_ARTIFACT_LINE_PTRN
+        ]
+
+    # Check patterns with timestamp (groups 1 and 2)
+    for pattern in patterns_with_timestamp:
+        match = pattern.match(line)
         if match:
             timestamp, artifact = int(match.group(1)), match.group(2)
             elapsed_time = (
                 timestamp - initial_timestamp if initial_timestamp is not None else None
             )
             return elapsed_time, artifact
-        else:
-            match = OLD_CRASH_ARTIFACT_LINE_PTRN.match(line)
-            if match:
-                artifact = match.group(1)
-                return None, artifact
+
+    # Check patterns without timestamp (only group 1)
+    for pattern in patterns_without_timestamp:
+        match = pattern.match(line)
+        if match:
+            artifact = match.group(1)
+            return None, artifact
+
         return None
 
 

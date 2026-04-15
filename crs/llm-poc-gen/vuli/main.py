@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from vuli.blackboard import Blackboard
+from vuli.chatlog import ChatLog
 from vuli.commandline import CommandLineOption, CommandLineOptionBuilder
 from vuli.common.setting import Setting
 from vuli.cp import CP
@@ -35,6 +36,7 @@ def initialize_system(
 ) -> None:
     root_dir: Path = Path(__file__).parent.parent.absolute()
     Setting().load(jazzer, joern_dir, output_dir, root_dir, dev, shared_dir)
+    ChatLog().initialize(Setting().output_dir)
     asyncio.run(Blackboard().set_path(Setting().blackboard_path))
     CP().load(cp_meta, harnesses, cg_paths)
     CP()._server_dir = server_dir
@@ -103,7 +105,8 @@ def main():
         cmd_option.diff_threashold,
     )
     runner: Optional[Runner] = create_runner(
-        cmd_option.mode, cmd_option.workers, cmd_option.model_cache
+        cmd_option.mode, cmd_option.workers, cmd_option.model_cache,
+        cmd_option.models, cmd_option.scan_sinks,
     )
     if runner is None:
         logger.error(f"Not Found Runner [mode={cmd_option.mode}]")

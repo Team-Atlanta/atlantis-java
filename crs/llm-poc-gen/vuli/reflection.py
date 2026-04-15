@@ -342,7 +342,7 @@ You MUST respond with the necessary class information to solve problem in the fo
         messages.append(HumanMessage(content=f"<CODE>\n{code}"))
         try:
             model_result: dict = await ModelManager().invoke_atomic(
-                messages, "gpt-4.1", JsonParser()
+                messages, "gpt-4.1", JsonParser(), agent="reflection"
             )
         except Exception as e:
             self._logger.warning(f"Skip Exception: {e}")
@@ -390,7 +390,7 @@ Step-by-step Instructions (CoT):
         )
         try:
             model_result: dict = await ModelManager().invoke(
-                messages, "gpt-4.1", JsonParser()
+                messages, "gpt-4.1", JsonParser(), agent="reflection"
             )
         except Exception as e:
             self._logger.warning(f"Skip Exception: {e}")

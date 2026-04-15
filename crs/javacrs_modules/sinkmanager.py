@@ -36,6 +36,17 @@ class SinkManagerParams(BaseModel):
     enabled: bool = Field(
         ..., description="**Mandatory**, true/false to enable/disable this module."
     )
+    allowed_sink_contributors: List[str] = Field(
+        default_factory=list,
+        description=(
+            "**Optional**, list of module names that are allowed to add NEW sinks "
+            "to the pool. Modules not in this list can still update metadata of "
+            "existing sinks but cannot introduce new ones. Empty list means all "
+            "modules are allowed (backward compat). Note: Redis-synced sinks count "
+            "as 'sinkmanager' source — include 'sinkmanager' here if you use "
+            "multi-pod fuzzing with a non-empty allowlist."
+        ),
+    )
 
     @field_validator("enabled")
     def enabled_should_be_boolean(cls, v):
@@ -73,6 +84,7 @@ class SinkManager(Module):
         super().__init__(name, crs, run_per_harness)
         self.params = params
         self.enabled = self.params.enabled
+        self.allowed_sink_contributors = set(self.params.allowed_sink_contributors)
         self.ttl_fuzz_time: int = self.crs.ttl_fuzz_time
         self.workdir = self.get_workdir("") / self.crs.cp.name
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -205,7 +217,7 @@ class SinkManager(Module):
         sinkpoint = await self._get_sink_from_redis(sp_key)
         if sinkpoint is None:
             return
-        await self.on_event_update_sinkpoint(sinkpoint)
+        await self.on_event_update_sinkpoint(sinkpoint, source="sinkmanager")
 
     async def _push_sinkpoint_to_redis(
         self, sp_key: str, remote_hash: Optional[str]
@@ -354,7 +366,9 @@ class SinkManager(Module):
             async with self._lock:
                 confs = [sink.coord.to_conf() for sink in self.sinkpoints.values()]
                 confs = [conf for conf in confs if conf]
-                conf_ctnt = "\n".join(confs)
+                # Each line ends with '\n', including the last one. POSIX-correct
+                # text file; lets readers like `wc -l` count sinks accurately.
+                conf_ctnt = "".join(f"{c}\n" for c in confs)
             await atomic_write_file(self.sink_conf_path, conf_ctnt)
             self.logH(None, f"Dumped sinkpoints to {self.sink_conf_path}")
         except Exception as e:
@@ -383,15 +397,32 @@ class SinkManager(Module):
             await asyncio.sleep(1)
         self.logH(None, "Reached end time, exiting _sync_sinkpoints_to_fs")
 
-    async def _update_sink(self, sink: Sinkpoint) -> List[SinkUpdateEvent]:
+    def _is_contributor_allowed(self, source: str) -> bool:
+        """Check if a source module is allowed to add new sinks."""
+        # Empty allowlist means all sources allowed (backward compat)
+        if not self.allowed_sink_contributors:
+            return True
+        return source in self.allowed_sink_contributors
+
+    async def _update_sink(
+        self, sink: Sinkpoint, source: str
+    ) -> List[SinkUpdateEvent]:
         async with self._lock:
             updated_sink = None
 
             # Update sink obj
             if sink.coord not in self.sinkpoints:
+                # New sink: enforce contributor allowlist
+                if not self._is_contributor_allowed(source):
+                    self.logH(
+                        None,
+                        f"Dropping new sink {sink.coord} from '{source}' (not in allowlist {sorted(self.allowed_sink_contributors)})",
+                    )
+                    return []
                 self.sinkpoints[sink.coord] = sink
                 updated_sink = sink
             else:
+                # Existing sink: metadata updates always allowed
                 if self.sinkpoints[sink.coord].merge(sink):
                     updated_sink = self.sinkpoints[sink.coord]
 
@@ -586,14 +617,21 @@ class SinkManager(Module):
                 f"{CRS_ERR} in on_event_sarif_challenge_solved: {str(e)} {traceback.format_exc()}",
             )
 
-    async def on_event_update_sinkpoint(self, sink: Sinkpoint):
-        """Handle new sinkpoint."""
+    async def on_event_update_sinkpoint(self, sink: Sinkpoint, source: str):
+        """Handle new sinkpoint.
+
+        Args:
+            sink: The Sinkpoint to add or merge.
+            source: Name of the calling module (e.g. 'sinkdetection', 'crashmanager').
+                    Used to enforce the `allowed_sink_contributors` allowlist for new
+                    sinks. Existing sinks always accept metadata updates regardless.
+        """
         if not self.enabled:
             self.logH(None, f"Module {self.name} is disabled, skip sink update event")
             return
 
         try:
-            events = await self._update_sink(sink)
+            events = await self._update_sink(sink, source)
             await self._notify_sink_update_events("SINK-UPDATE-EVENT", events)
         except Exception as e:
             self.logH(

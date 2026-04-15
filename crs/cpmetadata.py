@@ -7,7 +7,6 @@ Metadata example for CP aixcc/jvm/mock-java, it is saved in self.meta_path (CP_M
   "built_path": "/out",
   "cp_full_src": "/src",
   "cp_name": "aixcc/jvm/mock-java",
-  "sink_target_conf": "/app/crs-cp-java/sink-targets.txt",
   "sinkpoint_path": "/crs-workdir/worker-0/metadata/aixcc/jvm/mock-java/sinkpoints.json",
   "harnesses": {
     "OssFuzz1": {
@@ -715,7 +714,6 @@ class JavaCPMetadata:
         self.repo_src_path = self.crs.cp.cp_src_path
         self.built_path = self.crs.cp.built_path
         self.ref_diff_path = self.crs.cp.diff_path
-        self.sink_target_conf = Path(os.environ["JAVA_CRS_SINK_TARGET_CONF"])
         self.custom_sink_conf = self.crs.sinkmanager.get_custom_sink_conf_path()
         self.sinkpoint_path = self.workdir / "sinkpoints.json"
         self._set_full_src_dir()
@@ -734,7 +732,6 @@ class JavaCPMetadata:
                     "ref_diff_path": (
                         str(self.ref_diff_path.resolve()) if self.ref_diff_path else ""
                     ),
-                    "sink_target_conf": str(self.sink_target_conf.resolve()),
                     "custom_sink_conf": str(self.custom_sink_conf.resolve()),
                     "sinkpoint_path": str(self.sinkpoint_path.resolve()),
                     "built_path": str(self.built_path.resolve()),

@@ -114,7 +114,7 @@ For example, if lines 3 to 6 and line 8 are required, write it as follows.
                 ):
                     try:
                         return await ModelManager().invoke_atomic(
-                            copied_messages, model_name, JsonParser()
+                            copied_messages, model_name, JsonParser(), agent="extender"
                         )
                     except LLMRetriable:
                         await asyncio.sleep(60)

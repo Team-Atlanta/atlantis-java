@@ -1,3 +1,7 @@
-tenacity==9.0.0
-litellm==1.65.0
+tenacity==8.5.0
 hexdump2==1.2.2
+langchain==0.3.27
+langchain-community==0.3.31
+langchain-core==0.3.79
+langchain-litellm @ git+https://github.com/Akshay-Dongare/langchain-litellm.git@3d6d6752005d11ab2e946990b34fed14ce26cb2d
+pydantic==2.8.0

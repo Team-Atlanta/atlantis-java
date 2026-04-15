@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
-import os
-import shutil
 import sys
 import time
 import traceback
@@ -16,7 +14,7 @@ from javacrs_modules import (
     AtlDirectedJazzer,
     AtlJazzer,
     AtlLibAFLJazzer,
-    CodeQL,
+    SinkDetection,
     ConcolicExecutor,
     CPUAllocator,
     CrashManager,
@@ -103,24 +101,6 @@ class JavaCRS(CRS):
         else:
             self.inspector = None
 
-        # Handle ssmode sink file copy
-        if self.is_ssmode():
-            java_crs_src = os.environ.get("JAVA_CRS_SRC")
-            if java_crs_src:
-                ssmode_sink_path = Path(java_crs_src) / "ssmode-sink.txt"
-                sink_targets_path = Path(java_crs_src) / "sink-targets.txt"
-                if ssmode_sink_path.exists():
-                    shutil.copy2(ssmode_sink_path, sink_targets_path)
-                    self.log(
-                        f"Copied {ssmode_sink_path} to {sink_targets_path} for ssmode"
-                    )
-                else:
-                    self.log(
-                        f"Warning: ssmode-sink.txt not found at {ssmode_sink_path}"
-                    )
-            else:
-                self.log("Warning: JAVA_CRS_SRC environment variable not set")
-
     def _init_modules(self) -> List[Module]:
         module_list = [
             # cp level modules
@@ -135,7 +115,7 @@ class JavaCRS(CRS):
             ("deepgen", DeepGenModule, False),
             ("dictgen", Dictgen, False),
             ("diff_scheduler", DiffScheduler, False),
-            ("codeql", CodeQL, False),
+            ("sinkdetection", SinkDetection, False),
             # per-harness modules
             ("concolic", ConcolicExecutor, True),
             ("aixccjazzer", AIxCCJazzer, True),
@@ -244,7 +224,7 @@ class JavaCRS(CRS):
             self.deepgen.async_run(None),
             self.dictgen.async_run(None),
             self.diff_scheduler.async_run(None),
-            self.codeql.async_run(None),
+            self.sinkdetection.async_run(None),
             # libCRS entry func: inits harness runners and harness-level crs modules
             self.async_run(False),
         ]

@@ -277,7 +277,7 @@ class CrashManager(Module):
             self.logH(
                 None, f"CrashManager update sinkpoint to sinkmanager from crash: {sink}"
             )
-            await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+            await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="crashmanager")
 
     async def _process_result_json(self, hrunner, result_json_path: Path):
         async for crash in self._get_unhandled_crashes(hrunner, result_json_path):

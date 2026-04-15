@@ -6,36 +6,38 @@ Relevant code files:
 
 PROMPT_CODE_FILES
 
-Potential vulnerable target (refer as sinkpoint in following) basics:
+Potential vulnerable target (referred to as sinkpoint hereafter) basics:
 
 ```java
 // PROMPT_SINKPOINT_FILE_PATH, PROMPT_SINKPOINT_LINENO
 ...
 PROMPT_SINKPOINT_LINE_CONTENT
-// PROMPT_SINKPOINT_VULN_DESC
 ...
 ```
+PROMPT_SINKPOINT_VULN_DESC
 
-Input whose execution reaches the sinkpoint but not poc:
+The following input reaches the sinkpoint, but does not trigger the sanitizer:
 
 ```bash
 # hexdump
 PROMPT_BEEPSEED_HEXDUMP
+```
 
-# stacktrace at reaching point
+```
+# stacktrace of the above input when reaching the sinkpoint
 PROMPT_BEEPSEED_STACKTRACE
 ```
 
 Task:
 
-We are conducting AI-driven security testing, our Jazzer fuzzer has produced an input that leads the execution to reach the sinkpoint shown above. 
+We are conducting AI-driven security testing; our fuzzer Jazzer has produced an input that leads the execution to reach the sinkpoint shown above.
 
-Follow the steps below and generate the poc:
+Follow the steps below to generate the POC:
 
-- analyze why and how the sinkpoint is potentially vulnerable to that kind of vulnerability
-- infer what kind of input can leads the execution to an exploitation stage
-- considering the conditions/constraints along the execution path, construct the actual poc
+- Analyze why and how the sinkpoint is potentially vulnerable to that kind of vulnerability.
+- Infer what kind of input can lead the execution to exploit the vulnerability.
+- Considering the conditions/constraints along the execution path, construct the actual POC.
 
 Note that:
-- the focus of the poc is to trigger the targeted Jazzer sanitizer
-- in your response, the generated poc content should be wrapped by ``` and in hex string format, e.g., ```000102...```, so I can extract it and directly pass to bytes.fromhex
+- The focus of the POC is to trigger the targeted Jazzer sanitizer.
+- Provide your solution with the appropriate tool call

@@ -9,13 +9,10 @@ cd "$SCRIPT_DIR"
 echo "Installing Python dependencies..."
 pip3 install -r requirements.txt
 
-# Generate model and query files from sink definitions
-echo "Generating CodeQL model and query files..."
-python3 scripts/generate_models.py
-
-# Install CodeQL pack
+# Install CodeQL pack (downloads codeql/java-all and transitive deps into
+# the CodeQL package cache so the analyze step can resolve library imports)
 echo "Installing CodeQL pack..."
-cd sinks-pack
+cd sink-queries
 codeql pack install
 
 echo "Initialization complete!"

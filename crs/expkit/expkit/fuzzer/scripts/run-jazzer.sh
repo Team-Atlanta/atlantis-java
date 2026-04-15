@@ -70,6 +70,12 @@ do
     unset SKIP_SEED_CORPUS
   fi
 
+  if [[ -n \${FUZZ_VERIFY_ONLY} ]]; then
+    echo "FUZZ_VERIFY_ONLY is set, skip fuzzing"
+    sleep 1s
+    break
+  fi
+
   stdbuf -e 0 -o 0 \
     run_fuzzer ${FUZZ_TARGET_HARNESS} \
       "\$@" || echo @@@@@ exit code of Jazzer is $? @@@@@ >&2

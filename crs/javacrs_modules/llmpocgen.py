@@ -39,6 +39,20 @@ class LLMPOCGeneratorParams(BaseModel):
         ...,
         description="**Mandatory**, mode of `llmpocgen` module, one of 'crs' or 'static' or 'onetime', static mode is for testing purpose.",
     )
+    models: List[str] = Field(
+        default_factory=lambda: [
+            "claude-opus-4-20250514",
+            "o3",
+            "claude-sonnet-4-20250514",
+            "gemini-2.5-pro",
+            "gpt-4.1",
+        ],
+        description="**Optional**, list of available LLM models. Tasks use their own preference order but are constrained to this set. Default: all supported models.",
+    )
+    scan_sinks: bool = Field(
+        True,
+        description="**Optional**, whether llmpocgen should run its own Joern-based sink discovery (FROM_INSIDE). Default: True. Set to False to rely solely on sinks from the CRS sinkmanager.",
+    )
     diff_max_len: int = Field(
         65536,
         description="Maximum length for diff content processing, must be between 16K and 512K.",
@@ -156,9 +170,6 @@ class LLMPOCGenerator(Module):
             self.mode,
         ]
 
-        if self.crs.is_ssmode():
-            command.append("--dev")
-
         command.extend(
             [
                 "--cg",
@@ -169,7 +180,10 @@ class LLMPOCGenerator(Module):
                 self.diff_max_len,
                 "--worker",
                 self.worker_num,
+                "--models",
+                ",".join(self.params.models),
             ]
+            + (["--scan-sinks"] if self.params.scan_sinks else [])
         )
         command_str = " ".join(shlex.quote(str(arg)) for arg in command)
         # N.B. stdout & stderr are redirected to avoid python pipe OOM issues
@@ -206,6 +220,9 @@ cd "{str(self.tool_cwd.resolve())}"
         else:
             # It is abnormal as long as we are not killed by SIGKILL
             self.logH(None, f"{CRS_ERR} llm-poc-gen unexpectedly exits with ret {ret}")
+
+        # Notify jazzer about end of llm-poc-gen
+        await self._notify_jazzer()
 
     async def _async_parse_blackboard(
         self,
@@ -385,7 +402,7 @@ cd "{str(self.tool_cwd.resolve())}"
                 # Notify sink manager
                 sink = Sinkpoint.frm_dict(sink_dict)
                 self.logH(None, f"llmpocgen update sinkpoint to sinkmanager: {sink}")
-                await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+                await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="llmpocgen")
 
             except Exception as e:
                 self.logH(
@@ -461,6 +478,13 @@ cd "{str(self.tool_cwd.resolve())}"
 
             await asyncio.sleep(1)
 
+    async def _notify_jazzer(self):
+        """Notifies all enabled Jazzer modules that LLM POC generation is done."""
+        for mod in self.crs.modules:
+            if is_fuzzing_module(mod) and mod.enabled:
+                self.logH(None, f"Notifying Jazzer module {mod.name} of llm-poc-gen completion.")
+                await mod.notify_llm_poc_gen_done()
+
     async def _async_run(self, _):
         """Runs the LLMPOCGenerator module for a given CP."""
         if not self.enabled:
@@ -479,15 +503,21 @@ cd "{str(self.tool_cwd.resolve())}"
 
             blackboard_path = self.workdir / "blackboard"
 
-            results = await asyncio.gather(
-                self._async_gen_blackboard(self.workdir, cp_name, cpu_list),
-                self._async_monitor_blackboard(self.workdir, blackboard_path),
-                return_exceptions=True,
+            # Create monitor task
+            monitor_task = asyncio.create_task(
+                self._async_monitor_blackboard(self.workdir, blackboard_path)
             )
 
-            for result in results:
-                if isinstance(result, Exception):
-                    raise result
+            # Wait for gen_blackboard to finish
+            try:
+                await self._async_gen_blackboard(self.workdir, cp_name, cpu_list)
+            finally:
+                # Cancel monitor when gen_blackboard finishes
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    self.logH(None, "Blackboard monitor cancelled after gen_blackboard finished")
 
         except Exception as e:
             self.logH(
