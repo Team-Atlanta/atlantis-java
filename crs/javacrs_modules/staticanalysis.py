@@ -328,8 +328,6 @@ class StaticAnalysis(Module):
             str(self.static_ana_jar.resolve()),
             "--config",
             str(config_file.resolve()),
-            "--target-file",
-            str(self.crs.meta.sink_target_conf.resolve()),
             "--distance-map-file",
             str(self.static_ana_result.resolve()),
             "--cg-stages",

@@ -155,8 +155,8 @@ public class ArgumentParser {
         configFileOption.setRequired(true);
         options.addOption(configFileOption);
 
-        Option targetFileOption = new Option("t", "target-file", true, "Path to file with target specifications (api and coordinate format)");
-        targetFileOption.setRequired(true);
+        Option targetFileOption = new Option("t", "target-file", true, "Path to file with target specifications (api and coordinate format). Optional; if omitted, targets come solely from --sarif-sinkpoints.");
+        targetFileOption.setRequired(false);
         options.addOption(targetFileOption);
 
         Option sarifSinkpointsOption = Option.builder()
@@ -239,7 +239,9 @@ public class ArgumentParser {
         this.configFile = Path.of(cmd.getOptionValue("config"));
 
         // Target specification inputs
-        this.targetFile = Path.of(cmd.getOptionValue("target-file"));
+        this.targetFile = cmd.hasOption("target-file")
+                ? Path.of(cmd.getOptionValue("target-file"))
+                : null;
         this.sarifSinkpointsFile = cmd.hasOption("sarif-sinkpoints")
                 ? Path.of(cmd.getOptionValue("sarif-sinkpoints"))
                 : null;
@@ -288,13 +290,15 @@ public class ArgumentParser {
         parseConfigFile();
         parseFields();
 
-        // Load targets from target file
-        try {
-            List<String> lines = Files.readAllLines(this.targetFile);
-            targets.addAll(loadTargets(lines));
-        } catch (IOException e) {
-            System.err.println(LOG_ERROR + "Error reading target file: " + e.getMessage());
-            throw new IllegalArgumentException("Failed to read target file: " + this.targetFile, e);
+        // Load targets from target file (if provided)
+        if (this.targetFile != null) {
+            try {
+                List<String> lines = Files.readAllLines(this.targetFile);
+                targets.addAll(loadTargets(lines));
+            } catch (IOException e) {
+                System.err.println(LOG_ERROR + "Error reading target file: " + e.getMessage());
+                throw new IllegalArgumentException("Failed to read target file: " + this.targetFile, e);
+            }
         }
     }
 

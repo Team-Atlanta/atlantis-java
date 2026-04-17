@@ -353,7 +353,7 @@ http_jar(
 
 http_jar(
     name = "atlantis_static-analysis",
-    sha256 = "be88c9ca872747a2703617a56dc260355e04be70f87d8d8c0262c0e49e825a9f",
+    sha256 = "36465873f6a335ef905d81ffa231e56356c532a9a806bdc1dba33c896950d951",
     urls = ["file:third_party/static-analysis/static-analysis-1.0.jar"],
 )
 
