@@ -124,9 +124,10 @@ Your response must include the following JSON format:
 {code}
 ```"""
         )
+        model_name: str = ModelManager().resolve_model("gpt-4.1")
         try:
             result: dict = await ModelManager().invoke(
-                [message], "gpt-4.1", JsonParser(), agent="generator"
+                [message], model_name, JsonParser(), agent="generator"
             )
         except Exception as e:
             self._logger.warning(f"Skip Exception: {e}")

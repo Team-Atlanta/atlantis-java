@@ -41,3 +41,9 @@ Follow the steps below to generate the POC:
 Note that:
 - The focus of the POC is to trigger the targeted Jazzer sanitizer.
 - Provide your solution with the appropriate tool call
+
+FuzzedDataProvider byte layout (if the harness uses FDP):
+- Front cursor advances FORWARD for `consumeString/Bytes` and their `Remaining` variants.
+- Back cursor advances BACKWARD for all integer/boolean/char/float/enum/pickValue methods.
+- Multiple back-side calls read the tail IN REVERSE CALL ORDER: the first `consumeInt()` takes the LAST 4 bytes, the next takes the 4 before that, etc.
+- Ranged methods (`consumeInt(min,max)`, `consumeEnum`, `pickValue`) consume only enough bytes for the cardinality, not the natural width.

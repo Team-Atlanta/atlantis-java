@@ -732,7 +732,7 @@ class JavaCPMetadata:
                     "ref_diff_path": (
                         str(self.ref_diff_path.resolve()) if self.ref_diff_path else ""
                     ),
-                    "custom_sink_conf": str(self.custom_sink_conf.resolve()),
+                    "custom_sink_conf_path": str(self.custom_sink_conf.resolve()),
                     "sinkpoint_path": str(self.sinkpoint_path.resolve()),
                     "built_path": str(self.built_path.resolve()),
                     "cp_full_src": str(self.cp_full_src.resolve()),
@@ -869,7 +869,6 @@ class JavaCPMetadata:
         )
         os.environ["CP_SINKPOINTS_FILE"] = str(self.sinkpoint_path.resolve())
         os.environ["CP_METADATA_FILE"] = str(self.meta_path.resolve())
-        os.environ["CP_CUSTOM_SINK_CONF"] = str(self.custom_sink_conf.resolve())
         os.environ["DEEPGEN_TASK_REQ_DIR"] = str(
             self.crs.deepgen.get_task_req_dir().resolve()
         )

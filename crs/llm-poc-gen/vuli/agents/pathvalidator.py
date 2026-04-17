@@ -107,7 +107,8 @@ Please include follwoing json format at the end of your answer.
 """
         )
         messages.append(message)
-        model_result: dict = await ModelManager().invoke(messages, "gpt-4.1", Parser(), agent="pathvalidator")
+        model_name: str = ModelManager().resolve_model("gpt-4.1")
+        model_result: dict = await ModelManager().invoke(messages, model_name, Parser(), agent="pathvalidator")
         cache: bool = model_result.get("cache", False)
         cost: float = model_result.get("cost", 0.0)
         result: bool = model_result.get("result", "OK")
