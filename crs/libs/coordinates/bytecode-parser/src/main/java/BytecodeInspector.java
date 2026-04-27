@@ -128,9 +128,10 @@ public class BytecodeInspector {
     }
 
     static void processClass(InputStream is, String jarFilePath, String classFilePath) throws IOException {
-        ClassReader cr = new ClassReader(is);
+        byte[] bytecode = is.readAllBytes();
+        ClassReader cr = new ClassReader(bytecode);
         ClassNode classNode = new ClassNode();
-        cr.accept(classNode, ClassReader.SKIP_FRAMES);
+        cr.accept(classNode, 0);
 
         String className = classNode.name.replace('/', '.');
         if (!isWhitelisted(className)) {
@@ -140,28 +141,36 @@ public class BytecodeInspector {
         String sourceFileName = classNode.sourceFile != null ? classNode.sourceFile : "Unknown";
 
         for (MethodNode method : classNode.methods) {
+            int curLine = -1;
+            Set<Integer> recordedLines = new HashSet<>();
+
             for (AbstractInsnNode insn : method.instructions) {
                 if (insn instanceof LineNumberNode) {
-                    LineNumberNode lineNode = (LineNumberNode) insn;
-                    int offset = method.instructions.indexOf(lineNode.start);
-                    int line = lineNode.line;
-
-                    CodeLocation loc = new CodeLocation(
-                            jarFilePath,
-                            classFilePath,
-                            className,
-                            sourceFileName,
-                            method.name,
-                            method.desc,
-                            offset,
-                            line
-                    );
-
-                    // Use className as the outer key instead of sourceFileName
-                    index.computeIfAbsent(className, k -> new HashMap<>())
-                            .computeIfAbsent(line, k -> new ArrayList<>())
-                            .add(loc);
+                    curLine = ((LineNumberNode) insn).line;
+                    continue;
                 }
+                if (insn.getOpcode() < 0 || curLine < 0) {
+                    continue;
+                }
+                if (recordedLines.contains(curLine)) {
+                    continue;
+                }
+                recordedLines.add(curLine);
+
+                CodeLocation loc = new CodeLocation(
+                        jarFilePath,
+                        classFilePath,
+                        className,
+                        sourceFileName,
+                        method.name,
+                        method.desc,
+                        insn.getBytecodeOffset(),
+                        curLine
+                );
+
+                index.computeIfAbsent(className, k -> new HashMap<>())
+                        .computeIfAbsent(curLine, k -> new ArrayList<>())
+                        .add(loc);
             }
         }
     }

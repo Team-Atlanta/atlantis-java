@@ -274,10 +274,10 @@ class InsnCoordinate:
             class_name=coord_dict.get("class_name", None),
             method_name=coord_dict.get("method_name", None),
             method_desc=coord_dict.get("method_desc", None),
-            bytecode_offset=int(coord_dict.get("bytecode_offset") or -1),
+            bytecode_offset=int(v) if (v := coord_dict.get("bytecode_offset")) is not None else -1,
             mark_desc=coord_dict.get("mark_desc", None),
             file_name=coord_dict.get("file_name", None),
-            line_num=int(coord_dict.get("line_num") or -1),
+            line_num=int(v) if (v := coord_dict.get("line_num")) is not None else -1,
         )
 
     def to_conf(self) -> str | None:

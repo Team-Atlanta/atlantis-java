@@ -118,6 +118,19 @@ ENV ATL_JAZZER_DIR=/classpath/atl-jazzer
 ENV ATL_JAZZER_LIBAFL_DIR=/classpath/atl-libafl-jazzer
 ENV ATL_MOCK_JAZZER_DIR=/classpath/mock-jazzer
 
+## CRS-java atl-asm and atl-soot (must run before pip install coordinates)
+COPY ./crs/prebuilt ${JAVA_CRS_SRC}/prebuilt
+RUN cd ${JAVA_CRS_SRC}/prebuilt && \
+    ./mvn_install.sh
+ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
+
+## joern
+COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
+ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
+ENV JOERN_CLI=$JOERN_DIR/joern-cli
+ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
+ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
+
 ## crs python package deps
 COPY ./crs/libs ${JAVA_CRS_SRC}/libs
 RUN cd ${JAVA_CRS_SRC}/libs/libFDP/libfdp && cargo update simd_cesu8 --precise 1.0.1
@@ -134,19 +147,6 @@ RUN /venv/bin/pip install --no-cache-dir \
     /venv/bin/pip install --no-cache-dir \
         ${JAVA_CRS_SRC}/libs/claude-code-sdk-python && \
     rm -rf /root/.cache/pip
-
-## joern
-COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
-ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
-ENV JOERN_CLI=$JOERN_DIR/joern-cli
-ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
-ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
-
-## CRS-java atl-asm and atl-soot
-COPY ./crs/prebuilt ${JAVA_CRS_SRC}/prebuilt
-RUN cd ${JAVA_CRS_SRC}/prebuilt && \
-    ./mvn_install.sh
-ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
 
 ## jazzer-llm-augmented
 COPY ./crs/jazzer-llm-augmented ${JAVA_CRS_SRC}/jazzer-llm-augmented
