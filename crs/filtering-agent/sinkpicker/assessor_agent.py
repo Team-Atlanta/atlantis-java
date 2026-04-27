@@ -405,7 +405,7 @@ class ExploitabilityAssessor:
     def __init__(
         self,
         model: str,
-        temperature: float,
+        temperature: float | None,
         cp_meta: CPMetadata,
         work_dir: Path,
         max_iterations: int = 15,
@@ -419,14 +419,16 @@ class ExploitabilityAssessor:
         self.cost_tracker = LiteLLMCostTracker(model)
         self.interaction_logger = LLMInteractionLogger()
 
-        self.llm = ChatLiteLLM(
+        llm_kwargs = dict(
             model=f"litellm_proxy/{model}",
             api_key=api_key,
             api_base=base_url,
-            temperature=temperature,
             callbacks=[self.cost_tracker, self.interaction_logger],
-            request_timeout=30
+            request_timeout=30,
         )
+        if temperature is not None:
+            llm_kwargs["temperature"] = temperature
+        self.llm = ChatLiteLLM(**llm_kwargs)
         self.llm.streaming = False
 
         # Create LLM with structured output for assessment phase

@@ -168,7 +168,7 @@ def process_single_sink(
     sink_idx: int,
     sink: dict,
     gen_model: str,
-    temperature: float,
+    temperature: float | None,
     cp_meta: CPMetadata,
     workdir_path: Path,
     max_iterations: int,
@@ -257,7 +257,7 @@ def run_for_single_pair(
     harness: str,
     cwe: str,
     gen_model: str,
-    temperature: float,
+    temperature: float | None,
     cp_meta: CPMetadata,
     call_graph: CallGraph,
     workdir_path: Path,
@@ -505,7 +505,7 @@ def run(
     workdir: str = None,
     gen_model: str = "gpt-5",
     max_iterations: int = 15,
-    temperature: float = 0.0,
+    temperature: float | None = None,
     verbose: bool = False,
     max_workers: int = 10,
     force_agent_analysis: bool = False,
@@ -694,8 +694,8 @@ def main():
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.0,
-        help="LLM temperature for agent. Default: 0.0",
+        default=None,
+        help="LLM temperature for agent. If not set, uses the model's default.",
     )
     parser.add_argument(
         "--max-workers",
