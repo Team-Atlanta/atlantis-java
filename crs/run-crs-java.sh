@@ -79,7 +79,8 @@ run_crs() {
 
     update_crs_cfg
 
-    python3.12 -u ./main.py $DEFAULT_CFG 2>&1 | tee ./crs-java.log
+    mkdir -p $CRS_WORKDIR/worker-0
+    python3.12 -u ./main.py $DEFAULT_CFG 2>&1 | tee $CRS_WORKDIR/worker-0/crs-java.log
 
     popd > /dev/null
 }

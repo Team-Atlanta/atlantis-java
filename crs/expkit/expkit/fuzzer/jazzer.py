@@ -129,7 +129,7 @@ taskset -c {self.cpu_id} \\
         self.env["FUZZ_CUSTOM_ARGS"] = " ".join(self.custom_args)
         self.env["FUZZ_TARGET_HARNESS"] = self.target_harness
         if self.custom_sink_conf_path is not None:
-            self.env["FUZZ_CUSTOM_SINK_CONF"] = self.custom_sink_conf_path
+            self.env["FUZZ_CUSTOM_SINK_CONF"] = str(self.custom_sink_conf_path)
         if verify_only:
             self.env["FUZZ_VERIFY_ONLY"] = "1"
 
