@@ -195,16 +195,16 @@ class GenericPoVVerifier:
         self.last_input = input_bytes
 
         crashes = self._get_crash_for_input(input_bytes)
-        logger.info(f"found crashes: {crashes}")
+        logger.info(f"All crashes detected: {crashes}")
         crash_found = any([self._check_crash(crash) for crash in crashes])
 
         if crash_found:
-            logger.info(f"Crash found in verifier (attempt {self.counter})!")
+            logger.info(f"Valid crash found in verifier (attempt {self.counter})!")
             if self.first_solved is None:
                 self.first_solved = self.counter
             return f"Exploit successful, crash found"
         else:
-            logger.info(f"No crashes found in verifier (attempt {self.counter})")
+            logger.info(f"No valid crash found in verifier (attempt {self.counter})")
             return "No crashes found, exploit unsuccessful"  # TODO(fab1ano): add info whether sinkpoint was reached
 
     def _check_crash(self, crash: Any) -> bool:
@@ -216,13 +216,15 @@ class GenericPoVVerifier:
         Returns:
             True if the crash matches the expected vulnerability, False otherwise
         """
+        class_name = self.beepseed.coord.class_name.replace("/", ".")
+        method_name = self.beepseed.coord.method_name
+        line_no = self.beepseed.coord.line_num
+        file_name = self.beepseed.coord.file_name
+        signature = f"{class_name}.{method_name}({file_name}:{line_no})"
+        logger.warning(f"{CRS_WARN} Checking crash for signature: {signature}")
+
         stack_trace = crash[3]
         for stack_frame in stack_trace:
-            class_name = self.beepseed.coord.class_name.replace("/", ".")
-            method_name = self.beepseed.coord.method_name
-            line_no = self.beepseed.coord.line_num
-            file_name = self.beepseed.coord.file_name
-            signature = f"{class_name}.{method_name}({file_name}:{line_no})"
             if signature in stack_frame:
                 return True
 
@@ -282,7 +284,6 @@ class GenericPoVVerifier:
                     if "fuzz_data" in result and "log_dedup_crash_over_time" in result["fuzz_data"]:
                         crashes = result["fuzz_data"]["log_dedup_crash_over_time"]
                         if crashes:
-                            logger.info("Crash found in verifier!")
                             return crashes
 
         logger.info("No crashes found in verifier.")
