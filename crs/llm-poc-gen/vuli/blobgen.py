@@ -282,7 +282,7 @@ class BlobGenerator:
         except LLMRetriable as e:
             raise e
         except Exception as e:
-            self._logger.warning(
+            self._logger.exception(
                 f"Blob Generation Failed [reason=LLM Failed, model={model_name}, "
                 f"exc={e.__class__.__name__}: {e}]"
             )

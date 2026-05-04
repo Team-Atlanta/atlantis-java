@@ -450,8 +450,14 @@ class ModelManager(metaclass=Singleton):
             )
         except LLMRetriable as e:
             raise e
-        except Exception:
-            raise RuntimeError("LLM Output has unexpected format")
+        except Exception as e:
+            self._logger.exception(
+                f"LLM Output has unexpected format "
+                f"[model={model_name}, exc={e.__class__.__name__}: {e}]"
+            )
+            raise RuntimeError(
+                f"LLM Output has unexpected format: {e.__class__.__name__}: {e}"
+            ) from e
         return result
 
     @async_lock("_lock")
@@ -497,8 +503,9 @@ class ModelManager(metaclass=Singleton):
                 if i == self._max_retries:
                     raise e
             except Exception as e:
-                self._logger.warning(
-                    f"Skip Exception [case=while handling LLM answer, msg={e}]"
+                self._logger.exception(
+                    f"Skip Exception [case=while handling LLM answer, "
+                    f"model={model_name}, exc={e.__class__.__name__}: {e}]"
                 )
         raise RuntimeError("Unexpected State")
 
@@ -544,7 +551,21 @@ class ModelManager(metaclass=Singleton):
                 status_code: int = getattr(e, "status_code", 0)
                 if status_code == 429 or status_code >= 500:
                     raise LLMRetriable("")
-            raise RuntimeError("Failed to get response from LLM")
+            # Full traceback — re-runs are expensive, want everything first try.
+            self._logger.exception(
+                f"Failed to get response from LLM "
+                f"[model={runnable.model_name}, exc={e.__class__.__name__}: {e}]"
+            )
+            if isinstance(e, APIStatusError):
+                body = getattr(e, "response", None)
+                body_text = getattr(body, "text", None) if body is not None else None
+                self._logger.warning(
+                    f"APIStatusError detail "
+                    f"[status={getattr(e, 'status_code', '?')}, body={body_text!r}]"
+                )
+            raise RuntimeError(
+                f"Failed to get response from LLM: {e.__class__.__name__}: {e}"
+            ) from e
 
     async def _retry_parse(
         self,
