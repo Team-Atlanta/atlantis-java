@@ -197,6 +197,11 @@ class SinkpointExpTool:
                 )
                 try:
                     poc_prompt = self.prompt_generator.generate_poc_prompt()
+                    if self.workdir:
+                        prompt_file = self.workdir / "poc_prompt.txt"
+                        with open(prompt_file, "w") as f:
+                            f.write(poc_prompt)
+                        logger.info(f"Initial prompt saved to {prompt_file} ({len(poc_prompt)} chars)")
                     poc_response = execution_context.run(poc_prompt)
                     # Save response to a file in the workdir for debugging
                     if self.workdir:
@@ -316,6 +321,8 @@ class SinkpointExpTool:
                 result = {
                     "status": False,
                     "error": "No valid POC added to corpus, skipping exploitation",
+                    "workdir": str(work_dir),
+                    "fuzz_id": fuzz_id,
                 }
 
             else:
