@@ -34,7 +34,9 @@ logging.getLogger("LiteLLM").handlers[0].setFormatter(formatter)
 
 class FilePathInput(BaseModel):
     """Input schema for file path."""
-    file_path: str = Field(description="Path to the file to read (absolute or relative)")
+    file_path: str = Field(description="Path to the file to read (absolute or relative)", alias="path")
+
+    model_config = {"populate_by_name": True}
 
 
 class UnifiedReadFileTool(BaseTool):
