@@ -28,6 +28,10 @@ export CPMETA_REDIS_URL="redis://localhost:6379"
 
 export CRS_TARGET="${OSS_CRS_TARGET}"
 export LITELLM_URL="${OSS_CRS_LLM_API_URL}"
+if [ -n "$OSS_CRS_LLM_API_KEY_FILE" ] && [ -f "$OSS_CRS_LLM_API_KEY_FILE" ]; then
+    OSS_CRS_LLM_API_KEY="$(cat "$OSS_CRS_LLM_API_KEY_FILE")"
+    export OSS_CRS_LLM_API_KEY
+fi
 export LITELLM_KEY="${OSS_CRS_LLM_API_KEY}"
 export AIXCC_LITELLM_HOSTNAME="${OSS_CRS_LLM_API_URL}"
 
