@@ -238,6 +238,40 @@ async def test_invoke_non_register_model():
 
 
 @pytest.mark.asyncio
+async def test_invoke_unknown_name_with_other_registered():
+    """Strict dispatch: unknown model raises even if others are registered."""
+    await ModelManager().add_model(
+        lambda input, output: input + output, "mock", MockChatModel()
+    )
+    with pytest.raises(RuntimeError):
+        await ModelManager().invoke_atomic([], "fake", None)
+    with pytest.raises(RuntimeError):
+        await ModelManager().invoke([], "fake", None)
+
+
+@pytest.mark.asyncio
+async def test_resolve_model_fallback():
+    await ModelManager().add_model(
+        lambda input, output: input + output, "mock", MockChatModel()
+    )
+    assert ModelManager().resolve_model("mock") == "mock"
+    assert ModelManager().resolve_model("missing") == "mock"
+
+
+@pytest.mark.asyncio
+async def test_resolve_models_preserves_preference_order():
+    await ModelManager().add_model(
+        lambda input, output: input + output, "a", MockChatModel()
+    )
+    await ModelManager().add_model(
+        lambda input, output: input + output, "b", MockChatModel()
+    )
+    assert ModelManager().resolve_models(["b", "missing", "a"]) == ["b", "a"]
+    # No preferences match → return all registered as fallback
+    assert sorted(ModelManager().resolve_models(["x", "y"])) == ["a", "b"]
+
+
+@pytest.mark.asyncio
 @patch.object(ModelManager, "_invoke_atomic")
 async def test_invoke_runtime_error_from__invoke_atomic(patch_1):
     async def mock_1(*args, **kwargs) -> None:

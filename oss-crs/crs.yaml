@@ -11,6 +11,7 @@ target_build_phase:
       - build
       - crs/proj
       - crs/src
+      - crs/codeql-db
 
 crs_run_phase:
   runner:

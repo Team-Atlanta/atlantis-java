@@ -145,7 +145,7 @@ class BlobGenerator:
     ) -> BlobGeneratorResult:
         try:
             model_result: list[dict] = await ModelManager().invoke(
-                messages, model_name, parser
+                messages, model_name, parser, agent="blobgen"
             )
         except Exception as e:
             self._logger.warning(f"Skip Exception: {e}")
@@ -265,7 +265,7 @@ class BlobGenerator:
         """
         try:
             model_output: list[dict] = await ModelManager().invoke_atomic(
-                messages, model_name, parser
+                messages, model_name, parser, agent="blobgen"
             )
         except LLMParseException:
             self._logger.info(
@@ -281,9 +281,10 @@ class BlobGenerator:
             )
         except LLMRetriable as e:
             raise e
-        except Exception:
-            self._logger.info(
-                f"Blob Generation Failed [reason=LLM Failed, model={model_name}]"
+        except Exception as e:
+            self._logger.exception(
+                f"Blob Generation Failed [reason=LLM Failed, model={model_name}, "
+                f"exc={e.__class__.__name__}: {e}]"
             )
             return None
 

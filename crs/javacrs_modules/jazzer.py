@@ -64,6 +64,12 @@ class JazzerParams(BaseModel):
         1048576,
         description="**Optional**, libfuzzer -max_len param. If unset, will be 1048576 (1M).",
     )
+    fuzz_time: int = Field(
+        0, description="**Optional**, max fuzzing time. Default: 0 (unlimited)."
+    )
+    wait_for_llmpocgen: bool = Field(
+        False, description="**Optional**, whether to wait for llmpocgen to finish before starting to fuzz. Default: False."
+    )
 
     @field_validator("enabled")
     def enabled_should_be_boolean(cls, v):
@@ -103,6 +109,7 @@ class Jazzer(Module, ABC):
         self.ttl_fuzz_time: int = self.crs.ttl_fuzz_time
         self.envs["FUZZ_TTL_FUZZ_TIME"] = str(self.ttl_fuzz_time)
         self.params = params
+        self.llm_poc_gen_done_event = asyncio.Event()
         self._init_from_params()
 
     @abstractmethod
@@ -112,6 +119,13 @@ class Jazzer(Module, ABC):
         self.len_control = self.params.len_control
         self.max_len = self.params.max_len
         self.envs["FUZZ_KEEP_SEED"] = "on" if self.params.keep_seed else "off"
+        # If jazzer is configured with fuzz_time > 0, the actual fuzz_time is the min of
+        # the module's fuzz_time and the CRS-wide ttl_fuzz_time
+        self.fuzz_time = self.params.fuzz_time
+        if self.fuzz_time > 0:
+            self.ttl_fuzz_time = min(self.fuzz_time, self.ttl_fuzz_time)
+            self.envs["FUZZ_TTL_FUZZ_TIME"] = str(self.ttl_fuzz_time)
+        self.wait_for_llmpocgen = self.params.wait_for_llmpocgen
 
     def _init(self):
         pass
@@ -159,6 +173,10 @@ class Jazzer(Module, ABC):
                     hrunner,
                     f"Added seed file {seed_file.resolve()} into corpus_dir {corpus_dir.resolve()} as {dst_file.resolve()}",
                 )
+
+    async def notify_llm_poc_gen_done(self):
+        if self.enabled and self.wait_for_llmpocgen:
+            self.llm_poc_gen_done_event.set()
 
     async def get_expected_fuzz_instance_dirs(
         self, hrunner: HarnessRunner
@@ -378,6 +396,14 @@ taskset -c {",".join([str(c) for c in cpu_list])} \\
                 hrunner, fuzz_id, workdir
             )
 
+            # Wait for llmpocgen to finish before starting to fuzz (if configured)
+            if self.wait_for_llmpocgen:
+                self.logH(
+                    hrunner,
+                    f"{fuzz_id} is waiting for llmpocgen to finish before starting to fuzz",
+                )
+                await self.llm_poc_gen_done_event.wait()
+
             env = await self._prepare_environment(
                 hrunner,
                 fuzz_id,
@@ -596,7 +622,8 @@ class AtlJazzer(Jazzer):
         if self.crs.sinkmanager.enabled:
             sink_conf_file = self.crs.meta.get_custom_sink_conf_path()
             env["FUZZ_CUSTOM_SINK_CONF"] = str(sink_conf_file.resolve())
-        # Set FUZZ_SSMODE environment variable
+        # Disable Jazzer's built-in hardcoded sinkpoint table when ssmode is on,
+        # so only sinks fed via FUZZ_CUSTOM_SINK_CONF get instrumented.
         env["FUZZ_SSMODE"] = "on" if self.crs.is_ssmode() else "off"
         # Set JACOCO_COV_DUMP_PERIOD environment variable if specified
         if self.params.jacoco_cov_dump_period is not None:

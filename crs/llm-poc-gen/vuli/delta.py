@@ -247,6 +247,8 @@ class LLMDeltaHandler(DeltaHandler):
         return hunk_msgs
 
     async def _infer_sinks(self, hunk_messages: list[str]) -> list[dict]:
+        model_name: str = ModelManager().resolve_model("gpt-4.1")
+
         async def _infer(msg: str) -> list[dict]:
             messages: list[BaseMessage] = [
                 HumanMessage(
@@ -267,7 +269,7 @@ Line number should indicate the line in hunk where vulnerability will be trigger
             for i in range(0, 3):
                 try:
                     return await ModelManager().invoke_atomic(
-                        messages, "gpt-4.1", DeltaParser()
+                        messages, model_name, DeltaParser(), agent="delta"
                     )
                 except LLMRetriable:
                     await asyncio.sleep(60)

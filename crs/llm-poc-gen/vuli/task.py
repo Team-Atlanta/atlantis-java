@@ -146,8 +146,9 @@ class CoverageBasedGeneration(PathBasedGeneration):
         )
         task: dict = await self._reach(task)
         is_reached: bool = "error" not in task and task["reached"] is True
+        total_blobs: int = sum(task.get("history", {}).values())
         self._logger.info(
-            f"Finish Generation Reachable Blob [reached={is_reached}, harness={path.harness_id}, sink={path.v_point}]"
+            f"Finish Generation Reachable Blob [reached={is_reached}, total_blobs={total_blobs}, harness={path.harness_id}, sink={path.v_point}]"
         )
         if not is_reached:
 
@@ -196,11 +197,11 @@ class CoverageBasedGeneration(PathBasedGeneration):
             "candidate": task.get("candidate", None),
             "code_table": task.get("code_table", {}),
             "harness_id": task.get("harness_id", ""),
-            "models": [
+            "models": ModelManager().resolve_models([
                 "o3",
                 "gemini-2.5-pro",
                 "claude-opus-4-20250514",
-            ],
+            ]),
         }
         result_state: dict = await graph.ainvoke(input_state, {"recursion_limit": 100})
         necessary_keys: set[str] = {"code_table", "point", "prev", "reached"}
@@ -214,6 +215,7 @@ class CoverageBasedGeneration(PathBasedGeneration):
         task["point"] = result_state["point"]
         task["reached"] = result_state["reached"]
         task["prev"] = result_state["prev"]
+        task["history"] = result_state.get("history", {})
         return task
 
     async def _exploit(self, task: dict) -> dict:
@@ -239,11 +241,11 @@ class CoverageBasedGeneration(PathBasedGeneration):
                 "prev": task["prev"],
                 "point": task["point"],
                 "sanitizer": sanitizer,
-                "models": [
+                "models": ModelManager().resolve_models([
                     "o3",
                     "gemini-2.5-pro",
                     "claude-opus-4-20250514",
-                ],
+                ]),
             }
             result_state: dict = await graph.ainvoke(input_state)
             necessary_keys: set[str] = {"crash", "prev"}

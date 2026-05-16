@@ -72,3 +72,22 @@ def get_usable_cpu_id():
 
     logger.info("Defaulting to CPU 0")
     return 0
+
+
+def get_with_model_provider(model_name: str) -> str:
+    """Infer the model provider from the model name."""
+    model_name = model_name.lower()
+    if model_name.startswith("vertex"):
+        return "vertex_ai/openai/" + model_name.split("/")[-1] + "-maas"
+    elif model_name.startswith("gpt") or model_name.startswith("o1") or model_name.startswith("o3-"):
+        return "openai/" + model_name
+    elif model_name.startswith("claude-"):
+        return "anthropic/" + model_name
+    elif model_name.startswith("gemini-"):
+        return "gemini/" + model_name
+    elif model_name.startswith("grok-"):
+        return "xai/" + model_name
+    elif model_name.startswith("zai-"):
+        return "vertex_ai/" + model_name + "-maas"
+    else:
+        return "unknown"

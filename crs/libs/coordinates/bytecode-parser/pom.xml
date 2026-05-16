@@ -9,16 +9,17 @@
     <version>1.0-SNAPSHOT</version>
 
     <dependencies>
-        <!-- ASM -->
+        <!-- Patched ASM (atlantis) with getBytecodeOffset() support.
+             Installed into the local Maven repo by crs/prebuilt/mvn_install.sh. -->
         <dependency>
             <groupId>org.ow2.asm</groupId>
             <artifactId>asm</artifactId>
-            <version>9.7</version>
+            <version>9.8-atlantis</version>
         </dependency>
         <dependency>
             <groupId>org.ow2.asm</groupId>
             <artifactId>asm-tree</artifactId>
-            <version>9.7</version>
+            <version>9.8-atlantis</version>
         </dependency>
         <!-- JSON library -->
         <dependency>

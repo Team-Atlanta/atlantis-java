@@ -118,6 +118,19 @@ ENV ATL_JAZZER_DIR=/classpath/atl-jazzer
 ENV ATL_JAZZER_LIBAFL_DIR=/classpath/atl-libafl-jazzer
 ENV ATL_MOCK_JAZZER_DIR=/classpath/mock-jazzer
 
+## CRS-java atl-asm and atl-soot (must run before pip install coordinates)
+COPY ./crs/prebuilt ${JAVA_CRS_SRC}/prebuilt
+RUN cd ${JAVA_CRS_SRC}/prebuilt && \
+    ./mvn_install.sh
+ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
+
+## joern
+COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
+ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
+ENV JOERN_CLI=$JOERN_DIR/joern-cli
+ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
+ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
+
 ## crs python package deps
 COPY ./crs/libs ${JAVA_CRS_SRC}/libs
 RUN cd ${JAVA_CRS_SRC}/libs/libFDP/libfdp && cargo update simd_cesu8 --precise 1.0.1
@@ -135,19 +148,6 @@ RUN /venv/bin/pip install --no-cache-dir \
         ${JAVA_CRS_SRC}/libs/claude-code-sdk-python && \
     rm -rf /root/.cache/pip
 
-## joern
-COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
-ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
-ENV JOERN_CLI=$JOERN_DIR/joern-cli
-ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
-ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
-
-## CRS-java atl-asm and atl-soot
-COPY ./crs/prebuilt ${JAVA_CRS_SRC}/prebuilt
-RUN cd ${JAVA_CRS_SRC}/prebuilt && \
-    ./mvn_install.sh
-ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
-
 ## jazzer-llm-augmented
 COPY ./crs/jazzer-llm-augmented ${JAVA_CRS_SRC}/jazzer-llm-augmented
 
@@ -160,6 +160,12 @@ RUN cd ${JAVA_CRS_SRC}/static-analysis && \
 COPY ./crs/codeql ${JAVA_CRS_SRC}/codeql
 RUN cd ${JAVA_CRS_SRC}/codeql && \
     ./init.sh
+
+## filtering-agent (LLM-powered exploitability assessment)
+COPY ./crs/filtering-agent ${JAVA_CRS_SRC}/filtering-agent
+RUN cd ${JAVA_CRS_SRC}/filtering-agent && \
+    if [ -f requirements.txt ]; then /venv/bin/pip install --no-cache-dir -r requirements.txt; fi && \
+    rm -rf /root/.cache/pip
 
 ## llm-poc-gen
 COPY ./crs/llm-poc-gen ${JAVA_CRS_SRC}/llm-poc-gen
@@ -217,13 +223,11 @@ RUN cd ${JAVA_CRS_SRC}/deepgen/jvm/stuck-point-analyzer && \
     rm -rf /root/.cache/pip
 
 ## crs-java main entry
-COPY ./crs/*.sh ./crs/*.py ./crs/requirements.txt ./crs/jazzer_driver_stub ./crs/crs-java.config ./crs/sink-targets.txt ${JAVA_CRS_SRC}/
+COPY ./crs/*.sh ./crs/*.py ./crs/requirements.txt ./crs/jazzer_driver_stub ./crs/crs-java.config ${JAVA_CRS_SRC}/
 COPY ./crs/javacrs_modules ${JAVA_CRS_SRC}/javacrs_modules
 COPY ./crs/tests ${JAVA_CRS_SRC}/tests
 RUN /venv/bin/pip install --no-cache-dir -r ${JAVA_CRS_SRC}/requirements.txt && \
     rm -rf /root/.cache/pip
-ENV JAVA_CRS_SINK_TARGET_CONF=${JAVA_CRS_SRC}/sink-targets.txt
-ENV JAVA_CRS_CUSTOM_SINK_YAML=${JAVA_CRS_SRC}/codeql/sink_definitions.yml
 
 ## git setup
 RUN git config --global --add safe.directory '*'
@@ -236,12 +240,6 @@ COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_agent_deploy.jar /class
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_driver /classpath/raw-jazzer/jazzer
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_junit.jar /classpath/raw-jazzer/
 COPY --from=aixcc_afc_builder_base /usr/local/lib/jazzer_api_deploy.jar /classpath/raw-jazzer/
-
-### NOTE: exp only
-COPY crs/ssmode-lpg.toml ${JAVA_CRS_SRC}/ssmode-lpg.toml
-COPY crs/ssmode-sink.txt ${JAVA_CRS_SRC}/ssmode-sink.txt
-RUN mkdir -p ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet && \
-    cp ${JAVA_CRS_SRC}/ssmode-lpg.toml ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet/cpv.toml
 
 #################################################################################
 ## oss-crs integration layer

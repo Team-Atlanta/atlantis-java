@@ -8,6 +8,7 @@ set -e
 libCRS download-build-output build /out
 libCRS download-build-output crs/proj /out/crs/proj
 libCRS download-build-output crs/src /out/crs/src
+libCRS download-build-output crs/codeql-db /out/crs/codeql-db || echo "WARNING: No CodeQL database in build outputs"
 
 #############################################
 # 2. Register output directories

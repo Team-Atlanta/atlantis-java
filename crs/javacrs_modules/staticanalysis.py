@@ -253,7 +253,7 @@ class StaticAnalysis(Module):
         try:
             sink = Sinkpoint.frm_dict(target.get_target_location())
             self.logH(None, f"Static analysis update sinkpoint to sinkmanager: {sink}")
-            await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+            await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="staticanalysis")
         except Exception as e:
             self.logH(
                 None,
@@ -328,8 +328,6 @@ class StaticAnalysis(Module):
             str(self.static_ana_jar.resolve()),
             "--config",
             str(config_file.resolve()),
-            "--target-file",
-            str(self.crs.meta.sink_target_conf.resolve()),
             "--distance-map-file",
             str(self.static_ana_result.resolve()),
             "--cg-stages",

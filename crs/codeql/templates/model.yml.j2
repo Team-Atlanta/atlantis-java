@@ -1,8 +1,0 @@
-extensions:
-  - addsTo:
-      pack: codeql/java-all
-      extensible: sinkModel
-    data:
-{%- for sink in sinks %}
-      - ["{{ sink.package }}", "{{ sink.class_name }}", {{ sink.subtypes | lower }}, "{{ sink.name }}", "{{ sink.signature }}", "{{ sink.ext }}", "{{ sink.input_arg }}", "{{ sink.kind }}", "{{ sink.provenance }}"]
-{%- endfor %}

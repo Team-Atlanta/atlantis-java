@@ -77,89 +77,89 @@ RUN mkdir /classpath && mkdir /classpath/atl-jazzer && \
 #################################################################################
 ## Staged Images - Prebuilt atl-libafl-jazzer
 #################################################################################
-FROM aixcc_afc_builder_base AS atl_jazzer_libafl_builder
-
-# libAFL requires bindgen which requires libclang.
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y libclang-dev
-
-COPY fuzzers/atl-libafl-jazzer /app/crs-cp-java/fuzzers/atl-libafl-jazzer
-COPY fuzzers/jazzer-libafl /app/crs-cp-java/fuzzers/jazzer-libafl
-WORKDIR /app/crs-cp-java/fuzzers/atl-libafl-jazzer
-RUN yes | adduser --disabled-password builder && \
-    chown -R builder . && chown -R builder ../jazzer-libafl/
-
-USER builder:builder
-# Install Rust.
-RUN curl https://sh.rustup.rs -sSf | sh -s -- --component llvm-tools --default-toolchain nightly-2025-06-04 -y
-ENV PATH="/home/builder/.cargo/bin:${PATH}"
-RUN ln -sf /home/builder/.rustup/toolchains/nightly-2025-06-04-x86_64-unknown-linux-gnu /home/builder/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu
-RUN echo "build --java_runtime_version=local_jdk_17" >> .bazelrc \
-    && echo "build --cxxopt=-stdlib=libc++" >> .bazelrc \
-    && echo "build --linkopt=-lc++" >> .bazelrc
-RUN echo "build --experimental_repository_downloader_retries=5" >> .bazelrc \
-    && echo "build --http_timeout_scaling=2" >> .bazelrc \
-    && echo "build --repository_cache=/home/builder/.cache/bazel-repo" >> .bazelrc
-RUN bazel build \
-    //src/main/java/com/code_intelligence/jazzer:jazzer_standalone_deploy.jar \
-    //deploy:jazzer-api \
-    //deploy:jazzer-junit \
-    //launcher:jazzer
-RUN mkdir out && \
-    cp $(bazel cquery --output=files //src/main/java/com/code_intelligence/jazzer:jazzer_standalone_deploy.jar) out/jazzer_agent_deploy.jar && \
-    cp $(bazel cquery --output=files //launcher:jazzer) out/jazzer_driver && \
-    cp $(bazel cquery --output=files //deploy:jazzer-api) out/jazzer_api_deploy.jar && \
-    cp $(bazel cquery --output=files //deploy:jazzer-junit) out/jazzer_junit.jar
-
-USER root
-RUN mkdir /classpath && mkdir /classpath/atl-libafl-jazzer && \
-    cp out/jazzer_agent_deploy.jar /classpath/atl-libafl-jazzer/jazzer_standalone_deploy.jar && \
-    cp out/jazzer_driver /classpath/atl-libafl-jazzer/jazzer && \
-    cp out/jazzer_junit.jar /classpath/atl-libafl-jazzer/ && \
-    cp out/jazzer_api_deploy.jar /classpath/atl-libafl-jazzer/
+#FROM aixcc_afc_builder_base AS atl_jazzer_libafl_builder
+#
+## libAFL requires bindgen which requires libclang.
+#ENV DEBIAN_FRONTEND=noninteractive
+#RUN apt-get update && apt-get install -y libclang-dev
+#
+#COPY fuzzers/atl-libafl-jazzer /app/crs-cp-java/fuzzers/atl-libafl-jazzer
+#COPY fuzzers/jazzer-libafl /app/crs-cp-java/fuzzers/jazzer-libafl
+#WORKDIR /app/crs-cp-java/fuzzers/atl-libafl-jazzer
+#RUN yes | adduser --disabled-password builder && \
+#    chown -R builder . && chown -R builder ../jazzer-libafl/
+#
+#USER builder:builder
+## Install Rust.
+#RUN curl https://sh.rustup.rs -sSf | sh -s -- --component llvm-tools --default-toolchain nightly-2025-06-04 -y
+#ENV PATH="/home/builder/.cargo/bin:${PATH}"
+#RUN ln -sf /home/builder/.rustup/toolchains/nightly-2025-06-04-x86_64-unknown-linux-gnu /home/builder/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu
+#RUN echo "build --java_runtime_version=local_jdk_17" >> .bazelrc \
+#    && echo "build --cxxopt=-stdlib=libc++" >> .bazelrc \
+#    && echo "build --linkopt=-lc++" >> .bazelrc
+#RUN echo "build --experimental_repository_downloader_retries=5" >> .bazelrc \
+#    && echo "build --http_timeout_scaling=2" >> .bazelrc \
+#    && echo "build --repository_cache=/home/builder/.cache/bazel-repo" >> .bazelrc
+#RUN bazel build \
+#    //src/main/java/com/code_intelligence/jazzer:jazzer_standalone_deploy.jar \
+#    //deploy:jazzer-api \
+#    //deploy:jazzer-junit \
+#    //launcher:jazzer
+#RUN mkdir out && \
+#    cp $(bazel cquery --output=files //src/main/java/com/code_intelligence/jazzer:jazzer_standalone_deploy.jar) out/jazzer_agent_deploy.jar && \
+#    cp $(bazel cquery --output=files //launcher:jazzer) out/jazzer_driver && \
+#    cp $(bazel cquery --output=files //deploy:jazzer-api) out/jazzer_api_deploy.jar && \
+#    cp $(bazel cquery --output=files //deploy:jazzer-junit) out/jazzer_junit.jar
+#
+#USER root
+#RUN mkdir /classpath && mkdir /classpath/atl-libafl-jazzer && \
+#    cp out/jazzer_agent_deploy.jar /classpath/atl-libafl-jazzer/jazzer_standalone_deploy.jar && \
+#    cp out/jazzer_driver /classpath/atl-libafl-jazzer/jazzer && \
+#    cp out/jazzer_junit.jar /classpath/atl-libafl-jazzer/ && \
+#    cp out/jazzer_api_deploy.jar /classpath/atl-libafl-jazzer/
 
 #################################################################################
 ## Staged Images - Concolic Engine Build (/graal-jdk)
 #################################################################################
-FROM ubuntu:20.04 AS espresso_builder
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-    curl \
-    python3.9 \
-    python3-pip \
-    git \
-    zip \
-    wget \
-    build-essential \
-    libstdc++-9-dev
-
-# copy mx
-COPY concolic/graal-concolic/mx /mx
-
-ENV PATH="/mx:$PATH"
-RUN echo Y | mx fetch-jdk labsjdk-ce-21
-RUN python3 -mpip install ninja_syntax
-
-WORKDIR /graal-jdk
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz && \
-    tar -xzvf cmake-3.31.6-linux-x86_64.tar.gz && \
-    cp -r cmake-3.31.6-linux-x86_64/* /usr/ && \
-    rm -rf cmake-3.31.6-linux-x86_64
-
-# graal espresso
-COPY concolic/graal-concolic/graal-jdk-25-14 /graal-jdk
-COPY concolic/graal-concolic/docker-scripts /docker-scripts
-WORKDIR /graal-jdk
-RUN chmod +x /docker-scripts/*
-
-# put mx deps
-COPY --from=graal_deps /root/.mx /root/.mx
-
-ENV MODE="jvm-ce"
-ENV PREPARE_CMD="pushd /graal-jdk/espresso && mx --env=$MODE build --targets LLVM_TOOLCHAIN && mx --env $MODE create-generated-sources"
-RUN /docker-scripts/init_dev.sh /bin/bash -c "$PREPARE_CMD"
-ENV BUILD_CMD="pushd /graal-jdk/espresso && export MX_BUILD_EXPLODED=$MX_BUILD_EXPLODED && mx --env $MODE create-generated-sources && mx --env $MODE build"
-RUN /docker-scripts/init_dev.sh /bin/bash -c "$BUILD_CMD"
+#FROM ubuntu:20.04 AS espresso_builder
+#ARG DEBIAN_FRONTEND=noninteractive
+#RUN apt-get update && apt-get install -y \
+#    curl \
+#    python3.9 \
+#    python3-pip \
+#    git \
+#    zip \
+#    wget \
+#    build-essential \
+#    libstdc++-9-dev
+#
+## copy mx
+#COPY concolic/graal-concolic/mx /mx
+#
+#ENV PATH="/mx:$PATH"
+#RUN echo Y | mx fetch-jdk labsjdk-ce-21
+#RUN python3 -mpip install ninja_syntax
+#
+#WORKDIR /graal-jdk
+#RUN wget https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz && \
+#    tar -xzvf cmake-3.31.6-linux-x86_64.tar.gz && \
+#    cp -r cmake-3.31.6-linux-x86_64/* /usr/ && \
+#    rm -rf cmake-3.31.6-linux-x86_64
+#
+## graal espresso
+#COPY concolic/graal-concolic/graal-jdk-25-14 /graal-jdk
+#COPY concolic/graal-concolic/docker-scripts /docker-scripts
+#WORKDIR /graal-jdk
+#RUN chmod +x /docker-scripts/*
+#
+## put mx deps
+#COPY --from=graal_deps /root/.mx /root/.mx
+#
+#ENV MODE="jvm-ce"
+#ENV PREPARE_CMD="pushd /graal-jdk/espresso && mx --env=$MODE build --targets LLVM_TOOLCHAIN && mx --env $MODE create-generated-sources"
+#RUN /docker-scripts/init_dev.sh /bin/bash -c "$PREPARE_CMD"
+#ENV BUILD_CMD="pushd /graal-jdk/espresso && export MX_BUILD_EXPLODED=$MX_BUILD_EXPLODED && mx --env $MODE create-generated-sources && mx --env $MODE build"
+#RUN /docker-scripts/init_dev.sh /bin/bash -c "$BUILD_CMD"
 
 #################################################################################
 ## Staged Images - Prebuilt Joern (Public)
@@ -200,12 +200,25 @@ RUN mkdir -p $JAVA_CRS_SRC && chmod -R 0755 $JAVA_CRS_SRC
 ## CRS-java fuzzer binaries
 COPY --from=aixcc_jazzer_builder /classpath/aixcc-jazzer /classpath/aixcc-jazzer
 COPY --from=atl_jazzer_builder /classpath/atl-jazzer /classpath/atl-jazzer
-COPY --from=atl_jazzer_libafl_builder /classpath/atl-libafl-jazzer /classpath/atl-libafl-jazzer
+#COPY --from=atl_jazzer_libafl_builder /classpath/atl-libafl-jazzer /classpath/atl-libafl-jazzer
 COPY ./fuzzers/mock-jazzer /classpath/mock-jazzer
 ENV AIXCC_JAZZER_DIR=/classpath/aixcc-jazzer
 ENV ATL_JAZZER_DIR=/classpath/atl-jazzer
 ENV ATL_JAZZER_LIBAFL_DIR=/classpath/atl-libafl-jazzer
 ENV ATL_MOCK_JAZZER_DIR=/classpath/mock-jazzer
+
+## CRS-java atl-asm and atl-soot (must run before pip install coordinates)
+COPY ./prebuilt ${JAVA_CRS_SRC}/prebuilt
+RUN cd ${JAVA_CRS_SRC}/prebuilt && \
+    ./mvn_install.sh
+ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
+
+## joern
+COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
+ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
+ENV JOERN_CLI=$JOERN_DIR/joern-cli
+ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
+ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
 
 ## crs python package deps
 COPY ./libs ${JAVA_CRS_SRC}/libs
@@ -222,19 +235,6 @@ RUN /venv/bin/pip install --no-cache-dir \
     /venv/bin/pip install --no-cache-dir \
         ${JAVA_CRS_SRC}/libs/claude-code-sdk-python && \
     rm -rf /root/.cache/pip
-
-## joern
-COPY --from=joern_builder /opt/joern ${JAVA_CRS_SRC}/joern
-ENV JOERN_DIR=${JAVA_CRS_SRC}/joern/Joern
-ENV JOERN_CLI=$JOERN_DIR/joern-cli
-ENV JAVA2CPG=$JOERN_DIR/joern-cli/frontends/javasrc2cpg/bin
-ENV PATH=$PATH:$JAVA_HOME/bin:$JOERN_CLI:$JAVA2CPG
-
-## CRS-java atl-asm and atl-soot
-COPY ./prebuilt ${JAVA_CRS_SRC}/prebuilt
-RUN cd ${JAVA_CRS_SRC}/prebuilt && \
-    ./mvn_install.sh
-ENV JACOCO_CLI_DIR=${JAVA_CRS_SRC}/prebuilt/jacococli
 
 ## jazzer-llm-augmented
 COPY ./jazzer-llm-augmented ${JAVA_CRS_SRC}/jazzer-llm-augmented
@@ -254,6 +254,12 @@ COPY ./codeql ${JAVA_CRS_SRC}/codeql
 RUN cd ${JAVA_CRS_SRC}/codeql && \
     ./init.sh
 
+## filtering-agent (LLM-powered exploitability assessment)
+COPY ./filtering-agent ${JAVA_CRS_SRC}/filtering-agent
+RUN cd ${JAVA_CRS_SRC}/filtering-agent && \
+    if [ -f requirements.txt ]; then /venv/bin/pip install --no-cache-dir -r requirements.txt; fi && \
+    rm -rf /root/.cache/pip
+
 ## llm-poc-gen
 COPY ./llm-poc-gen ${JAVA_CRS_SRC}/llm-poc-gen
 ENV PATH=${PATH}:/root/.local/bin
@@ -271,21 +277,21 @@ RUN cd ${JAVA_CRS_SRC}/expkit && \
     /venv/bin/pip install -e . && \
     rm -rf /root/.cache/pip
 
-## Build espresso-JDK-dependent components
-## concolic executor engine (espresso-jdk & runtime)
-# copy binary only
-COPY --from=espresso_builder /graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/ /graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/
-# copy only the executor and provider
-COPY ./concolic/graal-concolic/executor /graal-jdk/concolic/graal-concolic/executor
-COPY ./concolic/graal-concolic/provider /graal-jdk/concolic/graal-concolic/provider
-COPY ./concolic/graal-concolic/scheduler /graal-jdk/concolic/graal-concolic/scheduler
-RUN cd /graal-jdk/concolic/graal-concolic/executor && \
-        JAVA_HOME=/graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/graalvm-espresso-jvm-ce-openjdk-21.0.2+13.1/ ./gradlew build && \
-        /venv/bin/pip install --no-cache-dir -r /graal-jdk/concolic/graal-concolic/executor/scripts/requirements.txt && \
-    cd /graal-jdk/concolic/graal-concolic/provider && \
-        JAVA_HOME=/graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/graalvm-espresso-jvm-ce-openjdk-21.0.2+13.1/ ./gradlew build && \
-    rm -rf /root/.cache/coursier && \
-    rm -rf /root/.cache/pip
+### Build espresso-JDK-dependent components
+### concolic executor engine (espresso-jdk & runtime)
+## copy binary only
+#COPY --from=espresso_builder /graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/ /graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/
+## copy only the executor and provider
+#COPY ./concolic/graal-concolic/executor /graal-jdk/concolic/graal-concolic/executor
+#COPY ./concolic/graal-concolic/provider /graal-jdk/concolic/graal-concolic/provider
+#COPY ./concolic/graal-concolic/scheduler /graal-jdk/concolic/graal-concolic/scheduler
+#RUN cd /graal-jdk/concolic/graal-concolic/executor && \
+#        JAVA_HOME=/graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/graalvm-espresso-jvm-ce-openjdk-21.0.2+13.1/ ./gradlew build && \
+#        /venv/bin/pip install --no-cache-dir -r /graal-jdk/concolic/graal-concolic/executor/scripts/requirements.txt && \
+#    cd /graal-jdk/concolic/graal-concolic/provider && \
+#        JAVA_HOME=/graal-jdk/sdk/mxbuild/linux-amd64/GRAALVM_ESPRESSO_JVM_CE_JAVA21/graalvm-espresso-jvm-ce-openjdk-21.0.2+13.1/ ./gradlew build && \
+#    rm -rf /root/.cache/coursier && \
+#    rm -rf /root/.cache/pip
 
 ## dictgen
 COPY ./dictgen ${JAVA_CRS_SRC}/dictgen
@@ -330,13 +336,11 @@ RUN cd ${JAVA_CRS_SRC}/deepgen/jvm/stuck-point-analyzer && \
     rm -rf /root/.cache/pip
 
 ## crs-java main entry
-COPY ./*.sh ./*.py ./requirements.txt ./jazzer_driver_stub ./crs-java.config ./sink-targets.txt ${JAVA_CRS_SRC}/
+COPY ./*.sh ./*.py ./requirements.txt ./jazzer_driver_stub ./crs-java.config ${JAVA_CRS_SRC}/
 COPY ./javacrs_modules ${JAVA_CRS_SRC}/javacrs_modules
 COPY ./tests ${JAVA_CRS_SRC}/tests
 RUN /venv/bin/pip install --no-cache-dir -r ${JAVA_CRS_SRC}/requirements.txt && \
     rm -rf /root/.cache/pip
-ENV JAVA_CRS_SINK_TARGET_CONF=${JAVA_CRS_SRC}/sink-targets.txt
-ENV JAVA_CRS_CUSTOM_SINK_YAML=${JAVA_CRS_SRC}/codeql/sink_definitions.yml
 
 ## git setup
 # git/python-git will not work if CP repo is of unknown user:
@@ -351,11 +355,6 @@ COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_agent_deploy.jar /class
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_driver /classpath/raw-jazzer/jazzer
 COPY --from=aixcc_afc_builder_base /usr/local/bin/jazzer_junit.jar /classpath/raw-jazzer/
 COPY --from=aixcc_afc_builder_base /usr/local/lib/jazzer_api_deploy.jar /classpath/raw-jazzer/
-
-COPY ssmode-lpg.toml ${JAVA_CRS_SRC}/ssmode-lpg.toml
-COPY ssmode-sink.txt ${JAVA_CRS_SRC}/ssmode-sink.txt
-RUN mkdir -p ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet && \
-    cp ${JAVA_CRS_SRC}/ssmode-lpg.toml ${JAVA_CRS_SRC}/llm-poc-gen/eval/sheet/cpv.toml
 
 WORKDIR ${JAVA_CRS_SRC}
 CMD ${JAVA_CRS_SRC}/run-crs-java.sh

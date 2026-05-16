@@ -1,0 +1,9 @@
+tenacity==8.5.0
+func-timeout==4.3.5
+langchain==0.3.27
+langchain-community==0.3.31
+langchain-core==0.3.79
+langchain-litellm @ git+https://github.com/Akshay-Dongare/langchain-litellm.git@3d6d6752005d11ab2e946990b34fed14ce26cb2d
+langgraph==1.0.1
+#langgraph>=0.2.0
+pydantic==2.8.0

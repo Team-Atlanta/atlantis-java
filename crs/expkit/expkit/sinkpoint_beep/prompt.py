@@ -87,6 +87,12 @@ The code is potentially vulnerable if the first argument of SAXParser.parse can 
         "sink-batik-TranscoderInput": """
 The code is potentially vulnerable if the first argument of TranscoderInput can be controlled. Typically, given one type of transcoder input, such as a svg file,the attacker can embed payload by crafting the external resource contained inside the svg, such as xlink:href or href in svg file. If the target program doesn't securely handle the embedded metadata, it can lead to various consequences depending on the input and the payload, such as File Path Traversal, Server Side Request Forgery (SSRF), Remote Code Execution (RCE), or Denial of Service (DoS) conditions. In our context, the PoC needs to be able to trigger the Jazzer sanitizer hooked functions, such as initializing a class 'jaz.Zer', invoking a system command called 'jazze', or accessing any external URL (such as websites or host/IP:port combinations), accessing a file named 'jazzer-traversal', or causing a timeout or OOM condition for DoS, etc.
 """,
+        "sink-ScriptEngineInjection": """
+The code is potentially vulnerable to a script injection. Inputs that contain the string '"jaz"+"zer"' (including the double quotes) during execution will be detected by Jazzer as valid proof of concept.
+""",
+        "sink-RemoteCodeExecution": """
+The code is potentially vulnerable to Remote Code Execution (RCE). This can happen when the code uses unsafe deserialization, unsafe reflection, or other mechanisms that allow for dynamic code execution. Inputs that cause the execution to trigger any Jazzer sanitizer hooked functions will be detected as valid proof of concept. This includes scenarios such as initializing a class 'jaz.Zer' and invoking a system command called 'jazze'.
+""",
     }
 
     _poc_template = None
@@ -101,10 +107,11 @@ The code is potentially vulnerable if the first argument of TranscoderInput can 
         with open(template_path) as f:
             return f.read()
 
-    def __init__(self, cp_meta: CPMetadata, beepseed: BeepSeed):
+    def __init__(self, cp_meta: CPMetadata, beepseed: BeepSeed, trim_context: bool = True):
         self.cp_meta = cp_meta
         self.cp_name = cp_meta.get_cp_name()
         self.beepseed = beepseed
+        self.trim_context = trim_context
 
         if PromptGenerator._poc_template is None:
             PromptGenerator._poc_template = self._load_template("gen-poc.txt")
@@ -117,31 +124,98 @@ The code is potentially vulnerable if the first argument of TranscoderInput can 
         if PromptGenerator._script_template is None:
             PromptGenerator._script_template = self._load_template("gen-script.txt")
 
+    def _get_file_content_with_context(self, file_path: str, line_numbers: list[int]) -> str:
+        """
+        Get file content - either full file or snippets around line numbers for large files.
+
+        Args:
+            file_path: Path to the source file
+            line_numbers: Line numbers from stack trace frames
+
+        Returns:
+            Formatted file content with line numbers
+        """
+        # If trim_context is False, always return the full file
+        if not self.trim_context:
+            return cat_n(file_path)
+
+        # Define line count threshold for when to use snippets
+        LINE_COUNT_THRESHOLD = 150
+
+        # Check line count
+        try:
+            with open(file_path) as f:
+                line_count = sum(1 for _ in f)
+        except (FileNotFoundError, OSError):
+            line_count = 0
+
+        if line_count < LINE_COUNT_THRESHOLD:
+            # Small file: show entire content
+            return cat_n(file_path)
+
+        # Large file: show merged snippets around line numbers
+        if not line_numbers:
+            return cat_n(file_path)
+
+        line_nums = sorted(line_numbers)
+
+        # Merge overlapping or nearby ranges (within 10 lines)
+        CONTEXT_LINES = 50
+        MERGE_DISTANCE = CONTEXT_LINES * 2
+
+        merged_ranges = []
+        for line_num in line_nums:
+            start = max(1, line_num - CONTEXT_LINES)
+            end = line_num + CONTEXT_LINES
+
+            # Check if this range overlaps or is close to the last merged range
+            if merged_ranges and start <= merged_ranges[-1][1] + MERGE_DISTANCE:
+                # Merge with previous range
+                merged_ranges[-1] = (
+                    merged_ranges[-1][0],
+                    max(merged_ranges[-1][1], end),
+                )
+            else:
+                # Add new range
+                merged_ranges.append((start, end))
+
+        # Read file content for the merged ranges
+        snippets = []
+        for start, end in merged_ranges:
+            snippet = cat_n_at_line(
+                file_path, (start + end) // 2, context_lines=(end - start) // 2
+            )
+            snippets.append(snippet)
+
+        if snippets:
+            return "\n...\n".join(snippets)
+        else:
+            return cat_n(file_path)
+
     def get_code_files(self) -> str:
         if not self.beepseed.stack_trace:
             return "No stack trace available to extract code files"
 
-        # Find the stack frames that has CP project source files
-        file_paths = set()
+        # Find the stack frames that have CP project source files and collect line numbers
+        file_line_ranges = {}  # file_path -> list of line numbers
         for frame in self.beepseed.stack_trace:
             source_path = self.cp_meta.resolve_frame_to_file_path(frame)
             if source_path:
-                file_paths.add(source_path)
+                line_num = frame.get("line_num", -1)
+                if line_num > 0:
+                    if source_path not in file_line_ranges:
+                        file_line_ranges[source_path] = []
+                    file_line_ranges[source_path].append(line_num)
 
-        if not file_paths:
+        if not file_line_ranges:
             return "No relevant source code files found in stack trace"
 
         formatted_files = []
-        for file_path in sorted(file_paths):
-            """
-            For each file:
-            ```
-            // File: /path/to/file
-            cat -n style content
-            ```
-            """
+        for file_path in sorted(file_line_ranges.keys()):
             file_header = f"// File: {file_path}"
-            file_content = cat_n(file_path)
+            file_content = self._get_file_content_with_context(
+                file_path, file_line_ranges[file_path]
+            )
 
             formatted_file = f"```\n{file_header}\n{file_content}\n```"
             formatted_files.append(formatted_file)

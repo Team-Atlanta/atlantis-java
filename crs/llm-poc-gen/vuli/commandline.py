@@ -23,6 +23,8 @@ class CommandLineOption(BaseModel):
     server_dir: Optional[Path] = None
     shared_dir: Optional[Path] = None
     diff_threashold: int
+    models: Optional[list[str]] = None
+    scan_sinks: bool = True
 
 
 class CommandLineOptionBuilder:
@@ -108,6 +110,18 @@ class CommandLineOptionBuilder:
             default=-1,
             help="Threshold for an LLM to attempt diff file analysis",
         )
+        parser.add_argument(
+            "--models",
+            type=str,
+            default=None,
+            help="Comma-separated list of available LLM model names. If not set, uses mode-specific defaults.",
+        )
+        parser.add_argument(
+            "--scan-sinks",
+            action="store_true",
+            default=False,
+            help="Enable Joern-based sink discovery (FROM_INSIDE). If not set, relies solely on CRS sinkmanager sinks.",
+        )
         args = parser.parse_args()
 
         cp_meta: Path = Path(args.cp_meta).absolute()
@@ -166,4 +180,6 @@ class CommandLineOptionBuilder:
             server_dir=server_dir,
             shared_dir=shared,
             diff_threashold=args.diff_threashold,
+            models=[m.strip() for m in args.models.split(",")] if args.models else None,
+            scan_sinks=args.scan_sinks,
         )

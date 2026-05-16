@@ -41,6 +41,12 @@ Format of the generated script:
 - To allow our tool correctly utilize the script, it must implement a function named `gen_one_seed` that returns one PoC for that fuzzing harness in bytes. An example is shown below.
 - This is just a suspicious sinkpoint, not a confirmed vulnerability. If you confirmed it is not exploitable after reasoning, you should just return the below unimplemented example, with a comment "NOT EXPLOITABLE" in `gen_one_seed` function.
 
+FuzzedDataProvider byte layout (if the harness uses FDP):
+- Front cursor advances FORWARD for `consumeString/Bytes` and their `Remaining` variants.
+- Back cursor advances BACKWARD for all integer/boolean/char/float/enum/pickValue methods.
+- Multiple back-side calls read the tail IN REVERSE CALL ORDER: the first `consumeInt()` takes the LAST 4 bytes, the next takes the 4 before that, etc.
+- Ranged methods (`consumeInt(min,max)`, `consumeEnum`, `pickValue`) consume only enough bytes for the cardinality, not the natural width.
+
 <example>
 def gen_one_seed() -> bytes: # for real usage
     # TODO: implement this to do poc generation

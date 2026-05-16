@@ -55,6 +55,7 @@ class CrashManager(Module):
         self.max_payload_per_ty = 2
         self.max_frame_layer = 10
         self._submitted_result_jsons = asyncio.Queue()
+        self._unmatched_crashes = []
 
     def _init(self):
         pass
@@ -277,7 +278,11 @@ class CrashManager(Module):
             self.logH(
                 None, f"CrashManager update sinkpoint to sinkmanager from crash: {sink}"
             )
-            await self.crs.sinkmanager.on_event_update_sinkpoint(sink)
+            await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="crashmanager")
+        elif not exp_id.startswith("NONSEC-") and sink_coord is None:
+            self._unmatched_crashes.append(
+                (hrunner, sanitizer, crash_msg, frames, dedup_token, artifact_name, artifact_abspath)
+            )
 
     async def _process_result_json(self, hrunner, result_json_path: Path):
         async for crash in self._get_unhandled_crashes(hrunner, result_json_path):
@@ -340,6 +345,36 @@ class CrashManager(Module):
                 None, f"{CRS_ERR} checking file '{path}': {e} {traceback.format_exc()}"
             )
 
+    async def _retry_unmatched_crashes(self):
+        """Retry matching crashes that had no sinkpoint match on first processing."""
+        if not self._unmatched_crashes:
+            return
+        still_unmatched = []
+        for hrunner, sanitizer, crash_msg, frames, dedup_token, artifact_name, artifact_abspath in self._unmatched_crashes:
+            sink_coord = await self.crs.sinkmanager.match_sinkpoint(frames)
+            if sink_coord is not None:
+                sink = Sinkpoint.frm_crash(
+                    Crash(
+                        hrunner.harness.name,
+                        sink_coord,
+                        sanitizer,
+                        crash_msg,
+                        frames,
+                        dedup_token,
+                        artifact_name,
+                        artifact_abspath,
+                    )
+                )
+                self.logH(
+                    None, f"CrashManager update sinkpoint to sinkmanager from previously unmatched crash: {sink}"
+                )
+                await self.crs.sinkmanager.on_event_update_sinkpoint(sink, source="crashmanager")
+            else:
+                still_unmatched.append(
+                    (hrunner, sanitizer, crash_msg, frames, dedup_token, artifact_name, artifact_abspath)
+                )
+        self._unmatched_crashes = still_unmatched
+
     async def _monitor_all_result_jsons(self):
         """Monitor all result.json files with a simple sequential loop."""
         path_tuples = await self._collect_all_result_json_paths()
@@ -372,6 +407,7 @@ class CrashManager(Module):
                             f"{CRS_ERR} processing submitted result.json: {e} {traceback.format_exc()}",
                         )
 
+                await self._retry_unmatched_crashes()
                 await asyncio.sleep(1)
 
         except asyncio.CancelledError:
